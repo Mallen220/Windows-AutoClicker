@@ -1,9 +1,9 @@
 import tkinter as tk
 from tkinter import Toplevel, Listbox, END, SINGLE
 import pyautogui
+import pyperclip
 import time
 import threading
-import random
 import keyboard
 
 # Global list to store events (as positions)
@@ -16,7 +16,6 @@ is_text_mode = False
 event_count = 0  # To track consecutive event creations
 max_event_count = 4  # Limit for consecutive event creation without pressing 'z'
 
-
 # Function to create an overlay window for event numbers
 def create_overlay():
     overlay = tk.Toplevel(root)
@@ -28,7 +27,6 @@ def create_overlay():
     overlay.label_dict = {}  # Store labels for each event
 
     return overlay
-
 
 def create_event():
     global is_text_mode, event_count
@@ -67,11 +65,11 @@ def stop_text_input():
     if input_window:
         save_text()  # Save and close text input when user clicks "Create Event" again
 
-
 # Function to delete the newest event
 def delete_newest_event():
     if events:
         events.pop()
+        timing_data.pop()
         print("Deleted the newest event.")
     else:
         print("No events to delete.")
@@ -100,7 +98,6 @@ def toggle_always_on_top():
     root.attributes("-topmost", always_on_top)
     always_on_top_button.config(text="Always on Top: ON" if always_on_top else "Always on Top: OFF")
 
-
 # Function to create an event number overlay
 def create_event_overlay(event_num, x, y):
     if overlay_active:
@@ -113,13 +110,12 @@ def create_event_overlay(event_num, x, y):
         label.place(x=x, y=y)
         overlay.label_dict[event_num] = label
 
-
 # Function to open a text input window with multiline support
 def open_text_input():
-    global input_window, text_box
+    global input_window, text_box, instant_type_var
     input_window = Toplevel(root)
     input_window.title("Enter Text")
-    input_window.geometry("300x200")
+    input_window.geometry("500x250")
 
     label = tk.Label(input_window, text="Enter text to simulate (Press 'Enter' for new line):")
     label.pack(pady=5)
@@ -129,10 +125,14 @@ def open_text_input():
     text_box.pack(pady=5)
     text_box.focus()
 
+    # Option for instant typing
+    instant_type_var = tk.BooleanVar()
+    instant_type_check = tk.Checkbutton(input_window, text="Instant Type", variable=instant_type_var)
+    instant_type_check.pack(pady=5)
+
     # Button to save and close the text input box (this will be triggered manually)
     save_button = tk.Button(input_window, text="Save Text", command=save_text)
     save_button.pack(pady=5)
-
 
 # Function to save text from the input box and close the window
 def save_text():
@@ -140,12 +140,13 @@ def save_text():
     user_text = text_box.get("1.0", tk.END).strip()  # Get text input (multiline)
     if user_text:
         events.append(user_text)
-        timing_data.append(100)  # Default typing speed (100 ms per character)
+        # Use instant typing or regular typing speed based on the checkbox
+        interval = 0 if instant_type_var.get() else 100  # Instant typing if checked, else default interval
+        timing_data.append(interval)
         print(f"Text event created: {user_text}")
     input_window.destroy()
     is_text_mode = False  # Reset text mode flag
     print("Text input mode exited.")
-
 
 # Function to rearrange events and adjust timings
 def rearrange_events():
@@ -228,7 +229,6 @@ def rearrange_events():
     close_button = tk.Button(rearrange_window, text="Close", command=rearrange_window.destroy)
     close_button.pack(pady=10)
 
-
 def start_program():
     global is_running
     is_running = True
@@ -246,7 +246,12 @@ def start_program():
                     print(f"Clicked at position: ({x}, {y})")
                     time.sleep(timing_data[i] / 1000)  # Wait based on timing data
                 elif isinstance(event, str):  # Keyboard input event
-                    type_text(event, timing_data[i] / 1000)  # Use the new function for finer control
+                    if timing_data[i] == 0:
+                        # Instant typing by pasting from clipboard
+                        pyperclip.copy(event)
+                        pyautogui.hotkey('ctrl', 'v')  # Paste from clipboard
+                    else:
+                        type_text(event, timing_data[i] / 1000)  # Regular typing
                     print(f"Typed text: {event}")
             time.sleep(0.5)  # Delay between rounds
 
@@ -267,14 +272,12 @@ def type_text(text, interval):
             pyautogui.press(char)
         time.sleep(interval)  # Control the interval between key presses
 
-
 # Function to stop the program
 def stop_program():
     global is_running
     is_running = False
     start_button.config(text="Start Program", command=start_program)
     print("Program stopped!")
-
 
 # Function to monitor the space key to stop the program
 def monitor_space_key():
@@ -286,7 +289,6 @@ def monitor_space_key():
     thread = threading.Thread(target=stop_on_space_key)
     thread.start()
 
-
 # Function to close and save the events
 def close_and_save():
     with open("events.txt", "w") as f:
@@ -294,7 +296,6 @@ def close_and_save():
             f.write(f"{event}\n")
     print("Events saved. Closing program.")
     root.quit()
-
 
 # GUI Setup
 root = tk.Tk()
