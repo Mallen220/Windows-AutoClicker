@@ -7,9 +7,8 @@ import pyperclip
 import keyboard
 import sys
 import os
-import json
 
-# pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." AutoClicker_main.py
+# pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "presets.txt;." AutoClicker_main.py
 
 # Global list to store events (as positions)
 events = []
@@ -24,16 +23,16 @@ delay_between_rounds = 500  # Default delay in milliseconds
 # Embed default events directly into the code (as an example)
 embedded_events = [
     {"type": "click", "position": (100, 200), "delay": 100},
-    {"type": "text", "content": "Hello World", "delay": 200},
+    {"type": "text", "content": "Hello World" , "delay": 200},
 ]
 
 # Determine the path to the icon file
 if getattr(sys, 'frozen', False):
     program_icon = os.path.join(sys._MEIPASS, 'AutoClicker.ico')
-    preset_file = os.path.join(sys._MEIPASS, 'presets.txt')
+    # preset_file = os.path.join(sys._MEIPASS, 'presets.txt')
 else:
     program_icon = 'AutoClicker.ico'
-    preset_file = 'presets.txt'
+    # preset_file = "presets.txt"  # File to store presets
 
 # Special key mappings
 special_keys = {
@@ -537,14 +536,24 @@ def update_last_save_preset():
         pass  # No file yet, will create a new one later
 
     # Remove any existing "Last save" preset
-    delete_preset("Last save\n")
-
     new_lines = []
+    skip = False
+    for line in preset_lines:
+        if line.strip() == "- Last save":
+            skip = True
+        elif skip and line.startswith("- "):  # Stop skipping after the next preset starts
+            skip = False
+        else:
+            new_lines.append(line)
+
     # Add the new "Last save" preset at the end
     new_lines.append("- Last save\n")
     new_lines.append(f"Delay: {delay_between_rounds}\n")
     for event, timing in zip(events, timing_data):
-        new_lines.append(f"{event}\t{timing}\n")
+        if isinstance(event, tuple):
+            new_lines.append(f"{event}\t{timing}\n")
+        elif isinstance(event, str):
+            new_lines.append(f"{event}\t{timing}\n")
     new_lines.append("\n")
 
     # Write back the updated presets with the new "Last save"
@@ -612,18 +621,3 @@ close_button = tk.Button(root, text="Close & Save", command=close_and_save)
 close_button.pack(pady=10)
 
 root.mainloop()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
