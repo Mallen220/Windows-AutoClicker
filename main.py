@@ -390,7 +390,7 @@ root.title("Event Controller")
 root.attributes("-alpha", 0.85)  # Semi-transparent
 
 # Set window size
-root.geometry("225x325") 
+root.geometry("225x325")
 
 # Function to enable dragging the window by clicking anywhere
 def on_drag_start(event):
