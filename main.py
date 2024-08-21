@@ -1,10 +1,11 @@
 import tkinter as tk
-from tkinter import Toplevel, Listbox, END, SINGLE
+from tkinter import Toplevel, Listbox, END, SINGLE, simpledialog
 import pyautogui
 import pyperclip
 import time
 import threading
 import keyboard
+import os
 
 # Global list to store events (as positions)
 events = []
@@ -13,8 +14,7 @@ is_running = False
 always_on_top = False  # Keep track of the "always on top" state
 overlay_active = True  # Overlay state
 is_text_mode = False
-event_count = 0  # To track consecutive event creations
-max_event_count = 4  # Limit for consecutive event creation without pressing 'z'
+preset_file = "presets.txt"  # File to store presets
 
 # Special key mappings
 special_keys = {
@@ -53,15 +53,12 @@ def create_overlay():
     overlay.overrideredirect(True)  # No title bar
     overlay.attributes("-transparentcolor", overlay["bg"])  # Transparent background
     overlay.label_dict = {}  # Store labels for each event
-
     return overlay
 
-def create_event():
-    global is_text_mode, event_count
-    if event_count >= max_event_count:
-        print("You need to press 'z' before creating more events.")
-        return
 
+# Function to create an event
+def create_event():
+    global is_text_mode
     if keyboard.is_pressed('ctrl'):
         # Enter text input mode
         if not is_text_mode:
@@ -72,21 +69,14 @@ def create_event():
     else:
         if is_text_mode:
             return  # Prevent creating a mouse event while in text mode
-
         print("Waiting for 'Z' key press to create the event...")
         keyboard.wait('z')
-        event_count = 0  # Reset the event counter after pressing 'z'
-
-        # Create a mouse click event at the current mouse position
         x, y = pyautogui.position()
         events.append((x, y))
         timing_data.append(100)  # Default wait time in milliseconds
         print(f"Event created at position: ({x}, {y})")
-
-        # Update overlays for all events after creating a new one
         update_event_overlays()
 
-    event_count += 1  # Increment the event count
 
 # Function to stop text input mode and close the input window
 def stop_text_input():
@@ -98,26 +88,24 @@ def delete_newest_event():
     if events:
         events.pop()
         timing_data.pop()
+        update_event_overlays()
         print("Deleted the newest event.")
     else:
         print("No events to delete.")
 
+
 # Function to update overlays for all events
 def update_event_overlays():
-    # Clear all existing overlays
     for label in overlay.label_dict.values():
         label.destroy()
-
-    # Recreate overlays for all events with the correct color
     for event_num, event in enumerate(events, 1):
-        if isinstance(event, tuple):  # Mouse click event
+        if isinstance(event, tuple):
             x, y = event
             create_event_overlay(event_num, x, y)
-        elif isinstance(event, str):  # Text event
-            # For text events, just create an overlay at the position of the last mouse event
-            # or use default coordinates (optional: adjust how you want text events shown)
-            x, y = pyautogui.position()  # Default to current position for now
+        elif isinstance(event, str):
+            x, y = pyautogui.position()
             create_event_overlay(event_num, x, y)
+
 
 # Function to toggle "always on top"
 def toggle_always_on_top():
@@ -126,17 +114,20 @@ def toggle_always_on_top():
     root.attributes("-topmost", always_on_top)
     always_on_top_button.config(text="Always on Top: ON" if always_on_top else "Always on Top: OFF")
 
+
 # Function to create an event number overlay
 def create_event_overlay(event_num, x, y):
     if overlay_active:
         if isinstance(events[event_num - 1], str):
-            label_color = "purple"  # Text event
-        else:
-            label_color = "red"  # Mouse click event
-
+            return
+        try:
+            label_color = "purple" if isinstance(events[event_num], str) else "red"
+        except:
+            label_color = "red"
         label = tk.Label(overlay, text=str(event_num), fg=label_color, font=("Arial", 24))
         label.place(x=x, y=y)
         overlay.label_dict[event_num] = label
+
 
 # Function to open a text input window with multiline support
 def open_text_input():
@@ -144,21 +135,14 @@ def open_text_input():
     input_window = Toplevel(root)
     input_window.title("Enter Text")
     input_window.geometry("500x250")
-
     label = tk.Label(input_window, text="Enter text to simulate (Press 'Enter' for new line):")
     label.pack(pady=5)
-
-    # Create a text box for multiline input
     text_box = tk.Text(input_window, width=40, height=5)
     text_box.pack(pady=5)
     text_box.focus()
-
-    # Option for instant typing
     instant_type_var = tk.BooleanVar()
     instant_type_check = tk.Checkbutton(input_window, text="Instant Type", variable=instant_type_var)
     instant_type_check.pack(pady=5)
-
-    # Button to save and close the text input box (this will be triggered manually)
     save_button = tk.Button(input_window, text="Save Text", command=save_text)
     save_button.pack(pady=5)
 
@@ -181,10 +165,8 @@ def rearrange_events():
     rearrange_window = Toplevel(root)
     rearrange_window.title("Rearrange Events")
     rearrange_window.geometry("600x600")
-
     event_listbox = Listbox(rearrange_window, selectmode=SINGLE, width=40, height=10)
     event_listbox.pack(pady=10)
-
     for i, event in enumerate(events):
         event_listbox.insert(END, f"Event {i + 1}: {event}")
 
@@ -194,10 +176,11 @@ def rearrange_events():
             return
         selected_idx = selected_idx[0]
         events[selected_idx], events[selected_idx - 1] = events[selected_idx - 1], events[selected_idx]
-        timing_data[selected_idx], timing_data[selected_idx - 1] = timing_data[selected_idx - 1], timing_data[selected_idx]
+        timing_data[selected_idx], timing_data[selected_idx - 1] = timing_data[selected_idx - 1], timing_data[
+            selected_idx]
         update_listbox()
         event_listbox.select_set(selected_idx - 1)
-        update_event_overlays()  # Update event overlays after moving
+        update_event_overlays()
 
     def move_down():
         selected_idx = event_listbox.curselection()
@@ -205,10 +188,11 @@ def rearrange_events():
             return
         selected_idx = selected_idx[0]
         events[selected_idx], events[selected_idx + 1] = events[selected_idx + 1], events[selected_idx]
-        timing_data[selected_idx], timing_data[selected_idx + 1] = timing_data[selected_idx + 1], timing_data[selected_idx]
+        timing_data[selected_idx], timing_data[selected_idx + 1] = timing_data[selected_idx + 1], timing_data[
+            selected_idx]
         update_listbox()
         event_listbox.select_set(selected_idx + 1)
-        update_event_overlays()  # Update event overlays after moving
+        update_event_overlays()
 
     def update_listbox():
         event_listbox.delete(0, END)
@@ -216,31 +200,87 @@ def rearrange_events():
             event_listbox.insert(END, f"Event {i + 1}: {event}")
 
     def open_timeout_window(idx):
-        # Open a window to ask for the timeout (in ms)
         timeout_window = Toplevel(rearrange_window)
         timeout_window.title(f"Set Timeout for Event {idx + 1}")
-
         label = tk.Label(timeout_window, text="Timeout? (ms)")
         label.pack(pady=5)
-
         timeout_entry = tk.Entry(timeout_window)
         timeout_entry.pack(pady=5)
-        timeout_entry.insert(0, str(timing_data[idx]))  # Set the current timing data as default
+        timeout_entry.insert(0, str(timing_data[idx]))
 
         def save_timeout():
             new_timeout = timeout_entry.get()
             try:
-                timing_data[idx] = int(new_timeout)  # Update the timing data
+                timing_data[idx] = int(new_timeout)
                 print(f"Updated timing for Event {idx + 1}: {new_timeout} ms")
-                update_listbox()  # Refresh the listbox after updating timing
-                timeout_window.destroy()  # Close the window
+                update_listbox()
+                timeout_window.destroy()
             except ValueError:
                 print("Please enter a valid number for the timeout.")
 
         save_button = tk.Button(timeout_window, text="Save", command=save_timeout)
         save_button.pack(pady=10)
 
-    # Bind double-click event to open timeout window
+    # Function to save current settings as a preset
+    def save_preset():
+        preset_name = simpledialog.askstring("Save Preset", "Enter a name for this preset:")
+        if preset_name:
+            with open(preset_file, 'a') as f:
+                f.write(f"- {preset_name}\n")
+                for event, timing in zip(events, timing_data):
+                    f.write(f"{event}\t{timing}\n")
+                f.write("\n")
+            print(f"Preset '{preset_name}' saved.")
+
+    # Function to load a selected preset
+    def load_preset():
+        load_window = Toplevel(root)
+        load_window.title("Load Preset")
+        load_window.geometry("300x400")
+        listbox = Listbox(load_window, width=40, height=15)
+        listbox.pack(pady=10)
+        try:
+            with open(preset_file, 'r') as f:
+                lines = f.readlines()
+                presets = [line.strip() for line in lines if line.strip() and not line.startswith('\t') and line.startswith('- ')]
+                for preset in presets:
+                    listbox.insert(END, preset)
+        except FileNotFoundError:
+            print("No preset file found.")
+
+        def load_selected():
+            global events
+            selected_preset = listbox.curselection()
+            if selected_preset:
+                events = []
+                preset_name = listbox.get(selected_preset)
+                print(f"Loading preset: {preset_name}")
+                with open(preset_file, 'r') as f:
+                    lines = f.readlines()
+                    loading = False
+                    for line in lines:
+                        if line.strip() == preset_name:
+                            loading = True
+                            continue
+                        if loading and not line.strip():
+                            break
+                        if loading:
+                            event_data = line.split('\t')
+                            if len(event_data) == 2:
+                                event, timing = event_data
+                                if event.startswith('('):
+                                    x, y = map(int, event.strip('()').split(','))
+                                    events.append((x, y))
+                                else:
+                                    events.append(event)
+                                timing_data.append(int(timing))
+                update_event_overlays()
+                load_window.destroy()
+                rearrange_window.destroy()
+
+        load_button = tk.Button(load_window, text="Load Selected Preset", command=load_selected)
+        load_button.pack(pady=10)
+
     def on_double_click(event):
         selected_idx = event_listbox.curselection()
         if selected_idx:
@@ -254,9 +294,17 @@ def rearrange_events():
     move_down_button = tk.Button(rearrange_window, text="Move Down", command=move_down)
     move_down_button.pack(pady=5)
 
+    save_preset_button = tk.Button(rearrange_window, text="Save Preset", command=save_preset)
+    save_preset_button.pack(pady=5)
+
+    load_preset_button = tk.Button(rearrange_window, text="Load Preset", command=load_preset)
+    load_preset_button.pack(pady=5)
+
     close_button = tk.Button(rearrange_window, text="Close", command=rearrange_window.destroy)
     close_button.pack(pady=10)
 
+
+# Function to start the program
 def start_program():
     global is_running
     is_running = True
@@ -268,18 +316,17 @@ def start_program():
             for i, event in enumerate(events):
                 if not is_running:
                     break
-                if isinstance(event, tuple):  # Mouse click event
+                if isinstance(event, tuple):
                     x, y = event
                     pyautogui.click(x, y)
                     print(f"Clicked at position: ({x}, {y})")
-                    time.sleep(timing_data[i] / 1000)  # Wait based on timing data
-                elif isinstance(event, str):  # Keyboard input event
+                    time.sleep(timing_data[i] / 1000)
+                elif isinstance(event, str):
                     if timing_data[i] == 0:
-                        # Instant typing by pasting from clipboard
                         pyperclip.copy(event)
-                        pyautogui.hotkey('ctrl', 'v')  # Paste from clipboard
+                        pyautogui.hotkey('ctrl', 'v')
                     else:
-                        type_text(event, timing_data[i] / 1000)  # Regular typing
+                        type_text(event, timing_data[i] / 1000)
                     print(f"Typed text: {event}")
             time.sleep(0.5)  # Delay between rounds
 
@@ -338,7 +385,7 @@ def close_and_save():
     print("Events saved. Closing program.")
     root.quit()
 
-# GUI Setup
+# Create the main window
 root = tk.Tk()
 root.title("Event Controller")
 
@@ -369,7 +416,3 @@ close_button = tk.Button(root, text="Close & Save", command=close_and_save)
 close_button.pack(pady=10)
 
 root.mainloop()
-
-
-
-
