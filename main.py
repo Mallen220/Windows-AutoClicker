@@ -229,7 +229,6 @@ def rearrange_events():
     close_button.pack(pady=10)
 
 
-# Function to run the events (start clicking)
 def start_program():
     global is_running
     is_running = True
@@ -245,10 +244,10 @@ def start_program():
                     x, y = event
                     pyautogui.click(x, y)
                     print(f"Clicked at position: ({x}, {y})")
+                    time.sleep(timing_data[i] / 1000)  # Wait based on timing data
                 elif isinstance(event, str):  # Keyboard input event
-                    pyautogui.write(event, interval=timing_data[i] / 1000)
+                    type_text(event, timing_data[i] / 1000)  # Use the new function for finer control
                     print(f"Typed text: {event}")
-                time.sleep(timing_data[i] / 1000)  # Wait based on timing data
             time.sleep(0.5)  # Delay between rounds
 
     thread = threading.Thread(target=run_events)
@@ -256,6 +255,17 @@ def start_program():
 
     # Monitor for space key press to stop the program
     monitor_space_key()
+
+# Function to simulate typing text with pyautogui.press() for finer control
+def type_text(text, interval):
+    for char in text:
+        if char == ' ':
+            pyautogui.press('space')
+        elif char == '\n':
+            pyautogui.press('enter')
+        else:
+            pyautogui.press(char)
+        time.sleep(interval)  # Control the interval between key presses
 
 
 # Function to stop the program
@@ -317,13 +327,6 @@ close_button = tk.Button(root, text="Close & Save", command=close_and_save)
 close_button.pack(pady=10)
 
 root.mainloop()
-
-
-
-
-
-
-
 
 
 
