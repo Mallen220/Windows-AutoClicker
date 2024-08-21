@@ -16,6 +16,34 @@ is_text_mode = False
 event_count = 0  # To track consecutive event creations
 max_event_count = 4  # Limit for consecutive event creation without pressing 'z'
 
+# Special key mappings
+special_keys = {
+    't': 't', 'r': 'r', 'accept': 'accept', 'add': 'add', 'alt': 'alt', 'altleft': 'altleft', 'altright': 'altright',
+    'apps': 'apps', 'backspace': 'backspace', 'browserback': 'browserback', 'browserfavorites': 'browserfavorites',
+    'browserforward': 'browserforward', 'browserhome': 'browserhome', 'browserrefresh': 'browserrefresh',
+    'browsersearch': 'browsersearch', 'browserstop': 'browserstop', 'capslock': 'capslock', 'clear': 'clear',
+    'convert': 'convert', 'ctrl': 'ctrl', 'ctrlleft': 'ctrlleft', 'ctrlright': 'ctrlright', 'decimal': 'decimal',
+    'del': 'del', 'delete': 'delete', 'divide': 'divide', 'down': 'down', 'end': 'end', 'enter': 'enter',
+    'esc': 'esc', 'escape': 'escape', 'execute': 'execute', 'f1': 'f1', 'f10': 'f10', 'f11': 'f11', 'f12': 'f12',
+    'f13': 'f13', 'f14': 'f14', 'f15': 'f15', 'f16': 'f16', 'f17': 'f17', 'f18': 'f18', 'f19': 'f19', 'f2': 'f2',
+    'f20': 'f20', 'f21': 'f21', 'f22': 'f22', 'f23': 'f23', 'f24': 'f24', 'f3': 'f3', 'f4': 'f4', 'f5': 'f5',
+    'f6': 'f6', 'f7': 'f7', 'f8': 'f8', 'f9': 'f9', 'final': 'final', 'fn': 'fn', 'hanguel': 'hanguel',
+    'hangul': 'hangul', 'hanja': 'hanja', 'help': 'help', 'home': 'home', 'insert': 'insert', 'junja': 'junja',
+    'kana': 'kana', 'kanji': 'kanji', 'launchapp1': 'launchapp1', 'launchapp2': 'launchapp2', 'launchmail': 'launchmail',
+    'launchmediaselect': 'launchmediaselect', 'left': 'left', 'modechange': 'modechange', 'multiply': 'multiply',
+    'nexttrack': 'nexttrack', 'nonconvert': 'nonconvert', 'num0': 'num0', 'num1': 'num1', 'num2': 'num2',
+    'num3': 'num3', 'num4': 'num4', 'num5': 'num5', 'num6': 'num6', 'num7': 'num7', 'num8': 'num8', 'num9': 'num9',
+    'numlock': 'numlock', 'pagedown': 'pagedown', 'pageup': 'pageup', 'pause': 'pause', 'pgdn': 'pgdn',
+    'pgup': 'pgup', 'playpause': 'playpause', 'prevtrack': 'prevtrack', 'print': 'print', 'printscreen': 'printscreen',
+    'prntscrn': 'prntscrn', 'prtsc': 'prtsc', 'prtscr': 'prtscr', 'return': 'return', 'right': 'right',
+    'scrolllock': 'scrolllock', 'select': 'select', 'separator': 'separator', 'shift': 'shift', 'shiftleft': 'shiftleft',
+    'shiftright': 'shiftright', 'sleep': 'sleep', 'space': 'space', 'stop': 'stop', 'subtract': 'subtract',
+    'tab': 'tab', 'up': 'up', 'volumedown': 'volumedown', 'volumemute': 'volumemute', 'volumeup': 'volumeup',
+    'win': 'win', 'winleft': 'winleft', 'winright': 'winright', 'yen': 'yen', 'command': 'command',
+    'option': 'option', 'optionleft': 'optionleft', 'optionright': 'optionright'
+}
+
+
 # Function to create an overlay window for event numbers
 def create_overlay():
     overlay = tk.Toplevel(root)
@@ -263,13 +291,26 @@ def start_program():
 
 # Function to simulate typing text with pyautogui.press() for finer control
 def type_text(text, interval):
-    for char in text:
-        if char == ' ':
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if char == '\\':
+            i += 1
+            if i < len(text):
+                special_key = text[i:]
+                next_special_key = next((key for key in special_keys if special_key.startswith(key)), None)
+                if next_special_key:
+                    pyautogui.press(special_keys[next_special_key])
+                    i += len(next_special_key) - 1
+                else:
+                    pyautogui.press(char)
+        elif char == ' ':
             pyautogui.press('space')
         elif char == '\n':
             pyautogui.press('enter')
         else:
             pyautogui.press(char)
+        i += 1
         time.sleep(interval)  # Control the interval between key presses
 
 # Function to stop the program
@@ -328,7 +369,6 @@ close_button = tk.Button(root, text="Close & Save", command=close_and_save)
 close_button.pack(pady=10)
 
 root.mainloop()
-
 
 
 
