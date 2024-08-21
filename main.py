@@ -5,8 +5,6 @@ import pyperclip
 import time
 import threading
 import keyboard
-import os
-
 # Global list to store events (as positions)
 events = []
 timing_data = []  # List to store timing data (in milliseconds)
@@ -389,9 +387,24 @@ def close_and_save():
 root = tk.Tk()
 root.title("Event Controller")
 
-# Set window transparency
 root.attributes("-alpha", 0.85)  # Semi-transparent
-root.geometry("300x600")
+
+# Set window size
+root.geometry("225x325")
+
+# Function to enable dragging the window by clicking anywhere
+def on_drag_start(event):
+    root._drag_data = {'x': event.x, 'y': event.y}
+
+def on_drag_motion(event):
+    delta_x = event.x - root._drag_data['x']
+    delta_y = event.y - root._drag_data['y']
+    new_x = root.winfo_x() + delta_x
+    new_y = root.winfo_y() + delta_y
+    root.geometry(f"+{new_x}+{new_y}")
+
+root.bind("<Button-1>", on_drag_start)
+root.bind("<B1-Motion>", on_drag_motion)
 
 # Overlay window for event numbers
 overlay = create_overlay()
