@@ -1,9 +1,9 @@
 import tkinter as tk
 from tkinter import Toplevel, Listbox, END, SINGLE, simpledialog
-import pyautogui
-import pyperclip
 import time
 import threading
+import pyautogui
+import pyperclip
 import keyboard
 # Global list to store events (as positions)
 events = []
