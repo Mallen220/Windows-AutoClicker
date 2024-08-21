@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import Toplevel, Listbox, END, SINGLE, simpledialog
+from tkinter import Toplevel, Listbox, END, SINGLE, simpledialog, filedialog
 import time
 import threading
 import pyautogui
@@ -7,6 +7,7 @@ import pyperclip
 import keyboard
 import sys
 import os
+import json
 
 # pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." AutoClicker_main.py
 
@@ -18,12 +19,22 @@ always_on_top = False  # Keep track of the "always on top" state
 overlay_active = True  # Overlay state
 is_text_mode = False
 preset_file = "presets.txt"  # File to store presets
+delay_between_rounds = 500  # Default delay in milliseconds
+
+# Embed default events directly into the code (as an example)
+embedded_events = [
+    {"type": "click", "position": (100, 200), "delay": 100},
+    {"type": "text", "content": "Hello World", "delay": 200},
+]
 
 # Determine the path to the icon file
 if getattr(sys, 'frozen', False):
     program_icon = os.path.join(sys._MEIPASS, 'AutoClicker.ico')
+    preset_file = os.path.join(sys._MEIPASS, 'presets.txt')
 else:
     program_icon = 'AutoClicker.ico'
+    preset_file = 'presets.txt'
+
 # Special key mappings
 special_keys = {
     't': 't', 'r': 'r', 'accept': 'accept', 'add': 'add', 'alt': 'alt', 'altleft': 'altleft', 'altright': 'altright',
@@ -51,6 +62,35 @@ special_keys = {
     'option': 'option', 'optionleft': 'optionleft', 'optionright': 'optionright'
 }
 
+# Function to modify an event
+def modify_event(index, new_event, new_timing):
+    if 0 <= index < len(events):
+        events[index] = new_event
+        timing_data[index] = new_timing
+        save_events()
+        print(f"Event {index + 1} modified: {new_event}, Delay: {new_timing}ms")
+
+# Function to save events back to the internal structure
+# Function to save events back to the internal structure
+def save_events():
+    global embedded_events
+    embedded_events = []
+    for i, event in enumerate(events):
+        if isinstance(event, tuple):
+            embedded_events.append({"type": "click", "position": event, "delay": timing_data[i]})
+        elif isinstance(event, str):
+            embedded_events.append(
+                {"type": "text", "content": event, "delay": timing_data[i]})
+
+# Load embedded events into the global events list
+def load_embedded_events():
+    global events, timing_data
+    for event in embedded_events:
+        if event['type'] == 'click':
+            events.append((event['position']))
+        elif event['type'] == 'text':
+            events.append(event['content'])
+        timing_data.append(event['delay'])
 
 # Function to create an overlay window for event numbers
 def create_overlay():
@@ -78,14 +118,13 @@ def create_event():
     else:
         if is_text_mode:
             return  # Prevent creating a mouse event while in text mode
-        print("Waiting for 'Z' key press to create the event...")
-        keyboard.wait('z')
+        print("Waiting for 'space' key press to create the event...")
+        keyboard.wait('space')
         x, y = pyautogui.position()
         events.append((x, y))
         timing_data.append(100)  # Default wait time in milliseconds
         print(f"Event created at position: ({x}, {y})")
         update_event_overlays()
-
 
 # Function to stop text input mode and close the input window
 def stop_text_input():
@@ -103,8 +142,10 @@ def delete_newest_event():
         print("No events to delete.")
 
 
+
 # Function to update overlays for all events
 def update_event_overlays():
+    save_events()
     for label in overlay.label_dict.values():
         label.destroy()
     for event_num, event in enumerate(events, 1):
@@ -181,6 +222,23 @@ def rearrange_events():
     for i, event in enumerate(events):
         event_listbox.insert(END, f"Event {i + 1}: {event}")
 
+    delay_label = tk.Label(rearrange_window, text="Delay Between Rounds (ms):")
+    delay_label.pack(pady=5)
+    delay_entry = tk.Entry(rearrange_window)
+    delay_entry.pack(pady=5)
+    delay_entry.insert(0, str(delay_between_rounds))
+
+    def save_delay():
+        global delay_between_rounds
+        try:
+            delay_between_rounds = int(delay_entry.get())
+            print(f"Updated delay between rounds: {delay_between_rounds} ms")
+        except ValueError:
+            print("Please enter a valid number for the delay.")
+
+    save_delay_button = tk.Button(rearrange_window, text="Save Delay", command=save_delay)
+    save_delay_button.pack(pady=5)
+
     def move_up():
         selected_idx = event_listbox.curselection()
         if not selected_idx or selected_idx[0] == 0:
@@ -234,35 +292,72 @@ def rearrange_events():
         save_button.pack(pady=10)
 
     # Function to save current settings as a preset
-    def save_preset():
-        preset_name = simpledialog.askstring("Save Preset", "Enter a name for this preset:")
-        if preset_name:
-            with open(preset_file, 'a') as f:
-                f.write(f"- {preset_name}\n")
-                for event, timing in zip(events, timing_data):
+    def save_preset(name=None):
+        global preset_file
+
+        # If no name is provided, prompt the user
+        if not name:
+            name = simpledialog.askstring("Save Preset", "Enter a name for this preset:")
+
+        # If still no name is provided, exit the function
+        if not name:
+            print("No name provided, preset save canceled.")
+            return
+
+        # Save the new preset
+        with open(preset_file, 'a') as f:
+            f.write(f"- {name}\n")
+            f.write(f"Delay: {delay_between_rounds}\n")
+            for event, timing in zip(events, timing_data):
+                if isinstance(event, tuple):
                     f.write(f"{event}\t{timing}\n")
-                f.write("\n")
-            print(f"Preset '{preset_name}' saved.")
+                elif isinstance(event, str):
+                    f.write(f"{event}\t{timing}\n")
+            f.write("\n")
+
+        print(f"Preset '{name}' saved.")
 
     # Function to load a selected preset
     def load_preset():
         load_window = Toplevel(root)
         load_window.iconbitmap(program_icon)
         load_window.title("Load Preset")
-        load_window.geometry("300x400")
+        load_window.geometry("300x500")
         listbox = Listbox(load_window, width=40, height=15)
         listbox.pack(pady=10)
         try:
             with open(preset_file, 'r') as f:
                 lines = f.readlines()
-                presets = [line.strip() for line in lines if line.strip() and not line.startswith('\t') and line.startswith('- ')]
+                presets = [line.strip() for line in lines if
+                           line.strip() and not line.startswith('\t') and line.startswith('- ')]
                 for preset in presets:
                     listbox.insert(END, preset)
         except FileNotFoundError:
             print("No preset file found.")
 
+        def upload_preset():
+            file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+            if file_path:
+                with open(file_path, 'r') as f:
+                    contents = f.read()
+                    with open(preset_file, 'a') as preset_f:
+                        preset_f.write(contents + '\n')  # Append contents to preset.txt
+                    print(f"Preset from {file_path} uploaded successfully.")
+                    load_window.destroy()
+
+
+        def delete_selected():
+            global events, delay_between_rounds
+            selected_preset = listbox.curselection()
+            if selected_preset:
+                events = []
+                preset_name = listbox.get(selected_preset)
+                print(f"Deleting preset: {preset_name}")
+                delete_preset(preset_name)
+                load_window.destroy()
+
         def load_selected():
-            global events
+            global events, delay_between_rounds
             selected_preset = listbox.curselection()
             if selected_preset:
                 events = []
@@ -278,21 +373,33 @@ def rearrange_events():
                         if loading and not line.strip():
                             break
                         if loading:
-                            event_data = line.split('\t')
-                            if len(event_data) == 2:
-                                event, timing = event_data
-                                if event.startswith('('):
-                                    x, y = map(int, event.strip('()').split(','))
-                                    events.append((x, y))
-                                else:
-                                    events.append(event)
-                                timing_data.append(int(timing))
+                            if line.startswith("Delay:"):
+                                delay_between_rounds = int(line.split(":")[1].strip())
+                            else:
+                                event_data = line.split('\t')
+                                if len(event_data) >= 2:
+                                    event, timing = event_data[:2]
+                                    if event.startswith('('):
+                                        x, y = map(int, event.strip('()').split(','))
+                                        events.append((x, y))
+                                    else:
+                                        events.append(event)
+                                    timing_data.append(int(timing))
+
+                                    if len(event_data) == 3 and event_data[2].strip() == "True":  # Handle instant type
+                                        timing_data[-1] = 0  # Set timing to 0 for instant type
                 update_event_overlays()
                 load_window.destroy()
                 rearrange_window.destroy()
 
         load_button = tk.Button(load_window, text="Load Selected Preset", command=load_selected)
         load_button.pack(pady=10)
+
+        delete_selected_button = tk.Button(load_window, text="Delete Selected Preset", command=delete_selected)
+        delete_selected_button.pack(pady=10)
+
+        upload_button = tk.Button(load_window, text="Upload Preset", command=upload_preset)
+        upload_button.pack(pady=10)
 
     def on_double_click(event):
         selected_idx = event_listbox.curselection()
@@ -341,7 +448,7 @@ def start_program():
                     else:
                         type_text(event, timing_data[i] / 1000)
                     print(f"Typed text: {event}")
-            time.sleep(0.5)  # Delay between rounds
+            time.sleep(delay_between_rounds / 1000)  # Use the adjustable delay
 
     thread = threading.Thread(target=run_events)
     thread.start()
@@ -390,13 +497,72 @@ def monitor_space_key():
     thread = threading.Thread(target=stop_on_space_key)
     thread.start()
 
-# Function to close and save the events
+
+def delete_preset(name):
+    global preset_file
+    new_lines = []
+    skip = False
+
+    try:
+        with open(preset_file, 'r') as f:
+            preset_lines = f.readlines()
+
+        for line in preset_lines:
+            print(line)
+            if line.strip() == f"{name}":
+                skip = True
+            elif skip and line.startswith("- "):  # Stop skipping after the next preset starts
+                skip = False
+            if not skip:
+                new_lines.append(line)
+
+        with open(preset_file, 'w') as f:
+            f.writelines(new_lines)
+
+        print("Preset Deleted")
+    except FileNotFoundError:
+        print("Preset file not found.")
+
+
+# Function to update the "Last save" preset
+def update_last_save_preset():
+    global preset_file
+    preset_lines = []
+
+    # Read the existing presets file (if it exists)
+    try:
+        with open(preset_file, 'r') as f:
+            preset_lines = f.readlines()
+    except FileNotFoundError:
+        pass  # No file yet, will create a new one later
+
+    # Remove any existing "Last save" preset
+    delete_preset("Last save\n")
+
+    new_lines = []
+    # Add the new "Last save" preset at the end
+    new_lines.append("- Last save\n")
+    new_lines.append(f"Delay: {delay_between_rounds}\n")
+    for event, timing in zip(events, timing_data):
+        new_lines.append(f"{event}\t{timing}\n")
+    new_lines.append("\n")
+
+    # Write back the updated presets with the new "Last save"
+    with open(preset_file, 'w') as f:
+        f.writelines(new_lines)
+    print("Updated 'Last save' preset.")
+
+
+# Function to close and save the events and update the "Last save" preset
 def close_and_save():
-    with open("events.txt", "w") as f:
-        for event in events:
-            f.write(f"{event}\n")
-    print("Events saved. Closing program.")
+    print("Updating 'Last save' preset...")
+
+    # Update the "Last save" preset in the presets file
+    update_last_save_preset()
+
+    print("Closing program.")
     root.quit()
+
 
 # Create the main window
 root = tk.Tk()
@@ -446,3 +612,18 @@ close_button = tk.Button(root, text="Close & Save", command=close_and_save)
 close_button.pack(pady=10)
 
 root.mainloop()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
