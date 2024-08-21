@@ -1,6 +1,3 @@
-tkinter
 pyautogui
 pyperclip
-time
-threading
 keyboard
