@@ -7,13 +7,17 @@ import pyperclip
 import keyboard
 import sys
 import os
+import random
 
 # pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "Presets;Presets" AutoClicker_main.py
 
 
-# Global list to store events (as positions)
+# Global lists to store events and their timings
 events = []
-timing_data = []  # List to store timing data (in milliseconds)
+timing_data = []
+undo_stack = []  # Stack to store undo actions
+redo_stack = []  # Stack to store redo actions
+max_undo_redo = 25  # Limit to the number of undo/redo actions
 is_running = False
 always_on_top = False  # Keep track of the "always on top" state
 overlay_active = True  # Overlay state
@@ -125,6 +129,14 @@ def create_event():
         events.append((x, y))
         timing_data.append(100)  # Default wait time in milliseconds
         print(f"Event created at position: ({x}, {y})")
+
+        # Push the event to the undo stack
+        add_to_undo_stack(('create', (x, y)))
+
+        # Clear the redo stack since a new action occurred
+        redo_stack.clear()
+        update_event_overlays()
+
         update_event_overlays()
 
 # Function to stop text input mode and close the input window
@@ -135,14 +147,74 @@ def stop_text_input():
 # Function to delete the newest event
 def delete_newest_event():
     if events:
-        events.pop()
+        deleted_event = events.pop()
         timing_data.pop()
+        print(f"Deleted event at position: {deleted_event}")
+
+        # Clear the redo stack
+        redo_stack.clear()
         update_event_overlays()
         print("Deleted the newest event.")
     else:
         print("No events to delete.")
 
+# Undo the last action
+def undo():
+    if undo_stack:
+        action = undo_stack.pop()
+        action_type, event = action
+        if action_type == 'create':
+            # Undo creation (delete the event)
+            if event in events:
+                index = events.index(event)
+                events.pop(index)
+                timing_data.pop(index)
+                print(f"Undid creation of event at position: {event}")
+                add_to_redo_stack(('create', event))  # Push the inverse action to redo stack
+        elif action_type == 'delete':
+            # Undo deletion (recreate the event)
+            events.append(event)
+            timing_data.append(100)  # Default wait time
+            print(f"Undid deletion of event at position: {event}")
+            add_to_redo_stack(('delete', event))
+        update_event_overlays()
+    else:
+        print("No actions to undo.")
 
+# Redo the last undone action
+def redo():
+    if redo_stack:
+        action = redo_stack.pop()
+        action_type, event = action
+        if action_type == 'create':
+            # Redo creation (recreate the event)
+            events.append(event)
+            timing_data.append(100)  # Default wait time
+            print(f"Redid creation of event at position: {event}")
+            add_to_undo_stack(('create', event))
+        elif action_type == 'delete':
+            # Redo deletion (delete the event)
+            if event in events:
+                index = events.index(event)
+                events.pop(index)
+                timing_data.pop(index)
+                print(f"Redid deletion of event at position: {event}")
+                add_to_undo_stack(('delete', event))
+        update_event_overlays()
+    else:
+        print("No actions to redo.")
+
+# Add an action to the undo stack and maintain a maximum of 5 actions
+def add_to_undo_stack(action):
+    undo_stack.append(action)
+    if len(undo_stack) > max_undo_redo:
+        undo_stack.pop(0)  # Remove the oldest action if over the limit
+
+# Add an action to the redo stack and maintain a maximum of 5 actions
+def add_to_redo_stack(action):
+    redo_stack.append(action)
+    if len(redo_stack) > max_undo_redo:
+        redo_stack.pop(0)
 
 # Function to update overlays for all events
 def update_event_overlays():
@@ -244,7 +316,7 @@ def rearrange_events():
     rearrange_window = Toplevel(root)
     rearrange_window.iconbitmap(program_icon)
     rearrange_window.title("Rearrange Events")
-    rearrange_window.geometry("600x600")
+    rearrange_window.geometry("500x650")
     event_listbox = Listbox(rearrange_window, selectmode=SINGLE, width=40, height=10)
     event_listbox.pack(pady=10)
     for i, event in enumerate(events):
@@ -296,6 +368,15 @@ def rearrange_events():
         for i, event in enumerate(events):
             event_listbox.insert(END, f"Event {i + 1}: {event}")
 
+
+
+    # Function to randomize all event times
+    def randomize_all_times():
+        for i in range(len(timing_data)):
+            timing_data[i] = random.randint(50, 1000)
+            print(f"Randomized timing for Event {i + 1}: {timing_data[i]} ms")
+        update_event_overlays()
+
     def open_timeout_window(idx):
         timeout_window = Toplevel(rearrange_window)
         timeout_window.iconbitmap(program_icon)
@@ -316,8 +397,23 @@ def rearrange_events():
             except ValueError:
                 print("Please enter a valid number for the timeout.")
 
+            # Function to randomize timing for a specific event
+        def randomize_event_time(idx):
+            timing_data[idx] = random.randint(50, 1000)
+            print(f"Randomized timing for Event {idx + 1}: {timing_data[idx]} ms")
+            update_event_overlays()
+            timeout_window.destroy()
+
+        # Randomize Time Button
+        randomize_button = tk.Button(timeout_window, text="Randomize Time", command=lambda: randomize_event_time(idx))
+        randomize_button.pack(pady=5)
+
         save_button = tk.Button(timeout_window, text="Save", command=save_timeout)
         save_button.pack(pady=10)
+
+    # Button to randomize all event times
+    randomize_all_button = tk.Button(rearrange_window, text="Randomize All Times (Override Instant Type)", command=randomize_all_times)
+    randomize_all_button.pack(pady=5)
 
     # Function to load a selected preset
     def load_preset():
@@ -403,7 +499,7 @@ def rearrange_events():
         delete_button = tk.Button(load_window, text="Delete Selected Preset", command=delete_selected)
         delete_button.pack(pady=10)
 
-    def on_double_click(event):
+    def on_double_click():
         selected_idx = event_listbox.curselection()
         if selected_idx:
             open_timeout_window(selected_idx[0])
@@ -527,9 +623,6 @@ def update_last_save_preset():
     if not os.path.exists(presets_dir):
         os.makedirs(presets_dir)
 
-    # Define the path for the last saved preset
-    last_save_path = os.path.join(presets_dir, "last_save.txt")
-
     # Check if the last_save.txt exists and if it does, update it
     try:
         save_preset("last_save")
@@ -572,6 +665,9 @@ def on_drag_motion(event):
 
 root.bind("<Button-1>", on_drag_start)
 root.bind("<B1-Motion>", on_drag_motion)
+root.bind('<Control-z>', lambda event: undo())
+root.bind('<Control-Z>', lambda event: undo())  # For Windows case-sensitivity
+root.bind('<Control-Shift-Z>', lambda event: redo())
 
 # Overlay window for event numbers
 overlay = create_overlay()
