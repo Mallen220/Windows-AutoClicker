@@ -103,7 +103,3 @@ The **AutoClicker Program** is a versatile automation tool that allows users to 
 8. **Support additional input devices like joysticks and gamepads**.
 9. **Provide an option for automatic screen recording during event sequences**.
 10. **Add hotkey customization for more flexible controls**.
-
----
-
-This readme provides a comprehensive understanding of the AutoClicker Program's features and usage, along with a plan for further development.
