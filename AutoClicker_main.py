@@ -8,7 +8,8 @@ import keyboard
 import sys
 import os
 
-# pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "presets.txt;." AutoClicker_main.py
+# pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "Presets;Presets" AutoClicker_main.py
+
 
 # Global list to store events (as positions)
 events = []
@@ -17,7 +18,6 @@ is_running = False
 always_on_top = False  # Keep track of the "always on top" state
 overlay_active = True  # Overlay state
 is_text_mode = False
-preset_file = "presets.txt"  # File to store presets
 delay_between_rounds = 500  # Default delay in milliseconds
 
 # Embed default events directly into the code (as an example)
@@ -26,13 +26,15 @@ embedded_events = [
     {"type": "text", "content": "Hello World" , "delay": 200},
 ]
 
-# Determine the path to the icon file
+# Determine the path to the icon and presets directory
 if getattr(sys, 'frozen', False):
     program_icon = os.path.join(sys._MEIPASS, 'AutoClicker.ico')
-    # preset_file = os.path.join(sys._MEIPASS, 'presets.txt')
 else:
     program_icon = 'AutoClicker.ico'
-    # preset_file = "presets.txt"  # File to store presets
+
+presets_dir = 'Presets'
+if not os.path.exists(presets_dir):
+    os.makedirs(presets_dir)
 
 # Special key mappings
 special_keys = {
@@ -210,6 +212,33 @@ def save_text():
     is_text_mode = False  # Reset text mode flag
     print("Text input mode exited.")
 
+# Function to save the current settings as a preset
+def save_preset(name=None):
+    # If no name is provided, prompt the user
+    if not name:
+        name = simpledialog.askstring("Save Preset", "Enter a name for this preset:")
+
+    # If still no name is provided, exit the function
+    if not name:
+        print("No name provided, preset save canceled.")
+        return
+
+    # Create the file path for the preset
+    preset_path = os.path.join(presets_dir, f"{name}.txt")
+
+    # Save the new preset
+    with open(preset_path, 'w') as f:
+        f.write(f"- {name}\n")
+        f.write(f"Delay: {delay_between_rounds}\n")
+        for event, timing in zip(events, timing_data):
+            if isinstance(event, tuple):
+                f.write(f"{event}\t{timing}\n")
+            elif isinstance(event, str):
+                f.write(f"{event}\t{timing}\n")
+        f.write("\n")
+
+    print(f"Preset '{name}' saved.")
+
 # Function to rearrange events and adjust timings
 def rearrange_events():
     rearrange_window = Toplevel(root)
@@ -290,32 +319,6 @@ def rearrange_events():
         save_button = tk.Button(timeout_window, text="Save", command=save_timeout)
         save_button.pack(pady=10)
 
-    # Function to save current settings as a preset
-    def save_preset(name=None):
-        global preset_file
-
-        # If no name is provided, prompt the user
-        if not name:
-            name = simpledialog.askstring("Save Preset", "Enter a name for this preset:")
-
-        # If still no name is provided, exit the function
-        if not name:
-            print("No name provided, preset save canceled.")
-            return
-
-        # Save the new preset
-        with open(preset_file, 'a') as f:
-            f.write(f"- {name}\n")
-            f.write(f"Delay: {delay_between_rounds}\n")
-            for event, timing in zip(events, timing_data):
-                if isinstance(event, tuple):
-                    f.write(f"{event}\t{timing}\n")
-                elif isinstance(event, str):
-                    f.write(f"{event}\t{timing}\n")
-            f.write("\n")
-
-        print(f"Preset '{name}' saved.")
-
     # Function to load a selected preset
     def load_preset():
         load_window = Toplevel(root)
@@ -324,35 +327,23 @@ def rearrange_events():
         load_window.geometry("300x500")
         listbox = Listbox(load_window, width=40, height=15)
         listbox.pack(pady=10)
-        try:
-            with open(preset_file, 'r') as f:
-                lines = f.readlines()
-                presets = [line.strip() for line in lines if
-                           line.strip() and not line.startswith('\t') and line.startswith('- ')]
-                for preset in presets:
-                    listbox.insert(END, preset)
-        except FileNotFoundError:
-            print("No preset file found.")
 
+        # List all .txt files in the presets directory
+        presets = [f for f in os.listdir(presets_dir) if f.endswith('.txt')]
+        for preset in presets:
+            listbox.insert(END, preset[:-4])  # Display file name without '.txt'
+
+            # Function to upload a preset
         def upload_preset():
             file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
             if file_path:
-                with open(file_path, 'r') as f:
-                    contents = f.read()
-                    with open(preset_file, 'a') as preset_f:
-                        preset_f.write(contents + '\n')  # Append contents to preset.txt
+                file_name = os.path.basename(file_path)
+                new_file_path = os.path.join(presets_dir, file_name)
+                if not os.path.exists(new_file_path):
+                    os.rename(file_path, new_file_path)  # Move the file to the presets directory
                     print(f"Preset from {file_path} uploaded successfully.")
-                    load_window.destroy()
-
-
-        def delete_selected():
-            global events, delay_between_rounds
-            selected_preset = listbox.curselection()
-            if selected_preset:
-                events = []
-                preset_name = listbox.get(selected_preset)
-                print(f"Deleting preset: {preset_name}")
-                delete_preset(preset_name)
+                else:
+                    print(f"Preset already exists: {file_name}")
                 load_window.destroy()
 
         def load_selected():
@@ -360,13 +351,13 @@ def rearrange_events():
             selected_preset = listbox.curselection()
             if selected_preset:
                 events = []
-                preset_name = listbox.get(selected_preset)
-                print(f"Loading preset: {preset_name}")
-                with open(preset_file, 'r') as f:
+                preset_name = listbox.get(selected_preset)  # Get the selected file name
+                preset_path = os.path.join(presets_dir, f"{preset_name}.txt")
+                with open(preset_path, 'r') as f:
                     lines = f.readlines()
                     loading = False
                     for line in lines:
-                        if line.strip() == preset_name:
+                        if line.strip() == f"- {preset_name}":
                             loading = True
                             continue
                         if loading and not line.strip():
@@ -384,21 +375,33 @@ def rearrange_events():
                                     else:
                                         events.append(event)
                                     timing_data.append(int(timing))
-
-                                    if len(event_data) == 3 and event_data[2].strip() == "True":  # Handle instant type
-                                        timing_data[-1] = 0  # Set timing to 0 for instant type
                 update_event_overlays()
                 load_window.destroy()
                 rearrange_window.destroy()
 
+
+
+        def delete_selected():
+            global events
+            selected_preset = listbox.curselection()
+            if selected_preset:
+                preset_name = listbox.get(selected_preset)
+                preset_path = os.path.join(presets_dir, f"{preset_name}.txt")
+                if os.path.exists(preset_path):
+                    os.remove(preset_path)
+                    print(f"Deleted preset: {preset_name}")
+                    listbox.delete(selected_preset)
+                    events = []
+                    update_event_overlays()
+
         load_button = tk.Button(load_window, text="Load Selected Preset", command=load_selected)
         load_button.pack(pady=10)
 
-        delete_selected_button = tk.Button(load_window, text="Delete Selected Preset", command=delete_selected)
-        delete_selected_button.pack(pady=10)
-
         upload_button = tk.Button(load_window, text="Upload Preset", command=upload_preset)
         upload_button.pack(pady=10)
+
+        delete_button = tk.Button(load_window, text="Delete Selected Preset", command=delete_selected)
+        delete_button.pack(pady=10)
 
     def on_double_click(event):
         selected_idx = event_listbox.curselection()
@@ -497,69 +500,41 @@ def monitor_space_key():
     thread.start()
 
 
+# Function to delete a preset file from the "Presets" directory
 def delete_preset(name):
-    global preset_file
-    new_lines = []
-    skip = False
+    # Create the directory if it doesn't exist
+    if not os.path.exists(presets_dir):
+        os.makedirs(presets_dir)
 
+    # Create the file path for the preset to be deleted
+    file_path = os.path.join(presets_dir, f"{name}.txt")
+
+    # Attempt to delete the file
     try:
-        with open(preset_file, 'r') as f:
-            preset_lines = f.readlines()
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+            print(f"Preset '{name}' deleted successfully.")
+        else:
+            print(f"Preset '{name}' not found.")
+    except Exception as e:
+        print(f"Error deleting preset '{name}': {e}")
 
-        for line in preset_lines:
-            print(line)
-            if line.strip() == f"{name}":
-                skip = True
-            elif skip and line.startswith("- "):  # Stop skipping after the next preset starts
-                skip = False
-            if not skip:
-                new_lines.append(line)
-
-        with open(preset_file, 'w') as f:
-            f.writelines(new_lines)
-
-        print("Preset Deleted")
-    except FileNotFoundError:
-        print("Preset file not found.")
 
 
 # Function to update the "Last save" preset
 def update_last_save_preset():
-    global preset_file
-    preset_lines = []
+    # Create the directory if it doesn't exist
+    if not os.path.exists(presets_dir):
+        os.makedirs(presets_dir)
 
-    # Read the existing presets file (if it exists)
+    # Define the path for the last saved preset
+    last_save_path = os.path.join(presets_dir, "last_save.txt")
+
+    # Check if the last_save.txt exists and if it does, update it
     try:
-        with open(preset_file, 'r') as f:
-            preset_lines = f.readlines()
-    except FileNotFoundError:
-        pass  # No file yet, will create a new one later
-
-    # Remove any existing "Last save" preset
-    new_lines = []
-    skip = False
-    for line in preset_lines:
-        if line.strip() == "- Last save":
-            skip = True
-        elif skip and line.startswith("- "):  # Stop skipping after the next preset starts
-            skip = False
-        else:
-            new_lines.append(line)
-
-    # Add the new "Last save" preset at the end
-    new_lines.append("- Last save\n")
-    new_lines.append(f"Delay: {delay_between_rounds}\n")
-    for event, timing in zip(events, timing_data):
-        if isinstance(event, tuple):
-            new_lines.append(f"{event}\t{timing}\n")
-        elif isinstance(event, str):
-            new_lines.append(f"{event}\t{timing}\n")
-    new_lines.append("\n")
-
-    # Write back the updated presets with the new "Last save"
-    with open(preset_file, 'w') as f:
-        f.writelines(new_lines)
-    print("Updated 'Last save' preset.")
+        save_preset("last_save")
+    except Exception as e:
+        print(f"Error updating last saved preset: {e}")
 
 
 # Function to close and save the events and update the "Last save" preset
