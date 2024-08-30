@@ -421,7 +421,7 @@ def save_preset(name=None):
 
 # Function to rearrange events and adjust timings
 def rearrange_events():
-    global embedded_events
+    global embedded_events, delay_between_rounds
     rearrange_window = Toplevel(root)
     rearrange_window.iconbitmap(program_icon)
     rearrange_window.title("Rearrange Events")
