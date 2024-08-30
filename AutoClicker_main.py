@@ -12,19 +12,13 @@ import pyperclip
 
 # pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "Presets;Presets" AutoClicker_main.py
 
-
-# Global lists to store events and their timings
-events = []
-timing_data = []
-click_type = []  # Double, Right, Left, Copy, Paste, Middle, Scroll
-press_count = []
-
-undo_stack = []  # Stack to store undo actions
-redo_stack = []  # Stack to store redo actions
+# Double, Right, Left, Copy, Paste, Middle, Scroll
+undo_stack = []
+redo_stack = []
 max_undo_redo = 25  # Limit to the number of undo/redo actions
 is_running = False
-always_on_top = False  # Keep track of the "always on top" state
-overlay_active = True  # Overlay state
+always_on_top = False
+overlay_active = True
 is_text_mode = False
 delay_between_rounds = 500  # Default delay in milliseconds
 
@@ -40,7 +34,6 @@ presets_dir = "Presets"
 if not os.path.exists(presets_dir):
     os.makedirs(presets_dir)
 
-# Special key mappings
 special_keys = {
     "t": "t",
     "r": "r",
@@ -170,48 +163,23 @@ special_keys = {
 
 
 # Function to modify an event
-def modify_event(index, new_event, new_timing, new_click_type, new_press_count):
-    if 0 <= index < len(events):
-        events[index] = new_event
-        timing_data[index] = new_timing
-        click_type[index] = new_click_type
-        press_count[index] = new_press_count
-        save_events()
+def modify_event(
+    index, new_event, new_timing, new_click_type=None, new_press_count=None
+):
+    if 0 <= index < len(embedded_events):
+        if isinstance(embedded_events[index], dict):
+            if "type" in embedded_events[index]:
+                if embedded_events[index]["type"] == "click":
+                    embedded_events[index]["position"] = new_event
+                    embedded_events[index]["delay"] = new_timing
+                    if new_click_type is not None:
+                        embedded_events[index]["click_type"] = new_click_type
+                    if new_press_count is not None:
+                        embedded_events[index]["press_count"] = new_press_count
+                elif embedded_events[index]["type"] == "text":
+                    embedded_events[index]["content"] = new_event
+                    embedded_events[index]["delay"] = new_timing
         print(f"Event {index + 1} modified: {new_event}, Delay: {new_timing}ms")
-
-
-# Function to save events back to the internal structure
-def save_events():
-    global embedded_events
-    embedded_events = []
-    for i, event in enumerate(events):
-        if isinstance(event, tuple):
-            embedded_events.append(
-                {
-                    "type": "click",
-                    "position": event,
-                    "Button": click_type[i],
-                    "Count": press_count[i],
-                    "delay": timing_data[i],
-                }
-            )
-        elif isinstance(event, str):
-            embedded_events.append(
-                {"type": "text", "content": event, "delay": timing_data[i]}
-            )
-
-
-# Load embedded events into the global events list
-def load_embedded_events():
-    global events, timing_data
-    for event in embedded_events:
-        if event["type"] == "click":
-            events.append((event["position"]))
-            click_type.append((event["Button"]))
-            press_count.append((event["Count"]))
-        elif event["type"] == "text":
-            events.append(event["content"])
-        timing_data.append(event["delay"])
 
 
 # Function to create an overlay window for event numbers
@@ -219,13 +187,11 @@ def create_overlay():
     overlay = tk.Toplevel(root)
     overlay.iconbitmap(program_icon)
     overlay.attributes("-alpha", 0.5)  # Semi-transparent window
-    overlay.attributes("-topmost", True)  # Always on top
-    overlay.geometry(
-        f"{root.winfo_screenwidth()}x{root.winfo_screenheight()}+0+0"
-    )  # Fullscreen
-    overlay.overrideredirect(True)  # No title bar
-    overlay.attributes("-transparentcolor", overlay["bg"])  # Transparent background
-    overlay.label_dict = {}  # Store labels for each event
+    overlay.attributes("-topmost", True)
+    overlay.geometry(f"{root.winfo_screenwidth()}x{root.winfo_screenheight()}+0+0")
+    overlay.overrideredirect(True)
+    overlay.attributes("-transparentcolor", overlay["bg"])
+    overlay.label_dict = {}
     return overlay
 
 
@@ -233,7 +199,6 @@ def create_overlay():
 def create_event():
     global is_text_mode
     if keyboard.is_pressed("ctrl"):
-        # Enter text input mode
         if not is_text_mode:
             is_text_mode = True
             open_text_input()
@@ -241,43 +206,41 @@ def create_event():
             stop_text_input()
     else:
         if is_text_mode:
-            return  # Prevent creating a mouse event while in text mode
+            return
         print("Waiting for 'space' key press to create the event...")
         keyboard.wait("space")
         x, y = pyautogui.position()
-        events.append((x, y))
-        click_type.append("left")
-        press_count.append(1)
-        timing_data.append(100)  # Default wait time in milliseconds
+
+        new_event = embedded_events.append(
+            {
+                "type": "click",
+                "position": (x, y),
+                "click_type": "left",
+                "press_count": 1,
+                "delay": 100,
+            }
+        )
         print(f"Event created at position: ({x}, {y})")
 
-        # Push the event to the undo stack
-        add_to_undo_stack(("create", (x, y)))
+        add_to_undo_stack(("create", new_event))
 
-        # Clear the redo stack since a new action occurred
         redo_stack.clear()
-        update_event_overlays()
-
         update_event_overlays()
 
 
 # Function to stop text input mode and close the input window
 def stop_text_input():
     if input_window:
-        save_text()  # Save and close text input when user clicks "Create Event" again
+        save_text()
 
 
 # Function to delete the newest event
 def delete_newest_event():
-    if events:
-        deleted_event = events.pop()
-        click_type.pop()
-        press_count.pop()
-        timing_data.pop()
+    if embedded_events:
+        deleted_event = embedded_events.pop()
+        add_to_undo_stack(("create", deleted_event))
         print(f"Deleted event at position: {deleted_event}")
 
-        # Clear the redo stack
-        redo_stack.clear()
         update_event_overlays()
         print("Deleted the newest event.")
     else:
@@ -289,22 +252,20 @@ def undo():
     if undo_stack:
         action = undo_stack.pop()
         action_type, event = action
+
         if action_type == "create":
-            # Undo creation (delete the event)
-            if event in events:
-                index = events.index(event)
-                events.pop(index)
-                timing_data.pop(index)
-                print(f"Undid creation of event at position: {event}")
-                add_to_redo_stack(
-                    ("create", event)
-                )  # Push the inverse action to redo stack
+            if event in embedded_events:
+                index = embedded_events.index(event)
+                embedded_events.pop(index)
+                print(f"Undid creation of event at position: {event['position']}")
+                add_to_redo_stack(("create", event))
+
         elif action_type == "delete":
-            # Undo deletion (recreate the event)
-            events.append(event)
-            timing_data.append(100)  # Default wait time
-            print(f"Undid deletion of event at position: {event}")
-            add_to_redo_stack(("delete", event))
+            embedded_events.append(event)
+            embedded_events.sort(key=lambda e: e.get("position", (0, 0)))
+            print(f"Undid deletion of event at position: {event['position']}")
+            add_to_redo_stack(("create", event))
+
         update_event_overlays()
     else:
         print("No actions to undo.")
@@ -313,39 +274,34 @@ def undo():
 # Redo the last undone action
 def redo():
     if redo_stack:
+        print(redo_stack)
+
         action = redo_stack.pop()
         action_type, event = action
+
         if action_type == "create":
-            # Redo creation (recreate the event)
-            events.append(event)
-            click_type.append("left")
-            press_count.append(1)
-            timing_data.append(100)  # Default wait time
-            print(f"Redid creation of event at position: {event}")
+            embedded_events.append(event)
+            embedded_events.sort(key=lambda e: e.get("position", (0, 0)))
+            print(f"Redid creation of event at position: {event['position']}")
             add_to_undo_stack(("create", event))
+
         elif action_type == "delete":
-            # Redo deletion (delete the event)
-            if event in events:
-                index = events.index(event)
-                events.pop(index)
-                click_type.pop()
-                press_count.pop()
-                timing_data.pop(index)
-                print(f"Redid deletion of event at position: {event}")
+            if event in embedded_events:
+                index = embedded_events.index(event)
+                embedded_events.pop(index)
+                print(f"Redid deletion of event at position: {event['position']}")
                 add_to_undo_stack(("delete", event))
-        update_event_overlays()
     else:
         print("No actions to redo.")
+    update_event_overlays()
 
 
-# Add an action to the undo stack and maintain a maximum of 5 actions
 def add_to_undo_stack(action):
     undo_stack.append(action)
     if len(undo_stack) > max_undo_redo:
-        undo_stack.pop(0)  # Remove the oldest action if over the limit
+        undo_stack.pop(0)
 
 
-# Add an action to the redo stack and maintain a maximum of 5 actions
 def add_to_redo_stack(action):
     redo_stack.append(action)
     if len(redo_stack) > max_undo_redo:
@@ -354,14 +310,14 @@ def add_to_redo_stack(action):
 
 # Function to update overlays for all events
 def update_event_overlays():
-    save_events()
     for label in overlay.label_dict.values():
         label.destroy()
-    for event_num, event in enumerate(events, 1):
-        if isinstance(event, tuple):
-            x, y = event
+
+    for event_num, event in enumerate(embedded_events, 1):
+        if event["type"] == "click":
+            x, y = event["position"]
             create_event_overlay(event_num, x, y)
-        elif isinstance(event, str):
+        elif event["type"] == "text":
             x, y = pyautogui.position()
             create_event_overlay(event_num, x, y)
 
@@ -379,12 +335,17 @@ def toggle_always_on_top():
 # Function to create an event number overlay
 def create_event_overlay(event_num, x, y):
     if overlay_active:
-        if isinstance(events[event_num - 1], str):
+        event = embedded_events[event_num - 1]
+        if event["type"] == "text":
             return
+
         try:
-            label_color = "purple" if isinstance(events[event_num], str) else "red"
+            label_color = (
+                "purple" if embedded_events[event_num]["type"] == "text" else "red"
+            )
         except:
             label_color = "red"
+
         label = tk.Label(
             overlay, text=str(event_num), fg=label_color, font=("Arial", 24)
         )
@@ -392,7 +353,6 @@ def create_event_overlay(event_num, x, y):
         overlay.label_dict[event_num] = label
 
 
-# Function to open a text input window with multiline support
 def open_text_input():
     global input_window, text_box, instant_type_var
     input_window = Toplevel(root)
@@ -418,47 +378,42 @@ def open_text_input():
 # Function to save text from the input box and close the window
 def save_text():
     global is_text_mode
-    user_text = text_box.get("1.0", tk.END).strip()  # Get text input (multiline)
+    user_text = text_box.get("1.0", tk.END).strip()
     if user_text:
-        events.append(user_text)
-        # Use instant typing or regular typing speed based on the checkbox
-        interval = (
-            0 if instant_type_var.get() else 100
-        )  # Instant typing if checked, else default interval
-        timing_data.append(interval)
+        event_data = {
+            "type": "text",
+            "content": user_text,
+            "delay": 0 if instant_type_var.get() else 100,
+        }
+        embedded_events.append(event_data)
         print(f"Text event created: {user_text}")
     input_window.destroy()
-    is_text_mode = False  # Reset text mode flag
+    is_text_mode = False
     print("Text input mode exited.")
 
 
 # Function to save the current settings as a preset
 def save_preset(name=None):
-    # If no name is provided, prompt the user
     if not name:
         name = simpledialog.askstring("Save Preset", "Enter a name for this preset:")
 
-    # If still no name is provided, exit the function
     if not name:
         print("No name provided, preset save canceled.")
         return
 
-    # Create the file path for the preset
     preset_path = os.path.join(presets_dir, f"{name}.txt")
 
     # Save the new preset
     with open(preset_path, "w") as f:
         f.write(f"- {name}\n")
         f.write(f"Delay: {delay_between_rounds}\n")
-        i = 0
-        for event, timing in zip(events, timing_data):
-            if isinstance(event, tuple):
+        for event_data in embedded_events:
+            if event_data["type"] == "click":
                 f.write(
-                    f"{event}\t{timing}\t{str(click_type[i])}\t{int(press_count[i])}\n"
+                    f"{event_data['position']}\t{event_data['delay']}\t{event_data['click_type']}\t{event_data['press_count']}\n"
                 )
-            elif isinstance(event, str):
-                f.write(f"{event}\t{timing}\n")
-            i = i + 1
+            elif event_data["type"] == "text":
+                f.write(f"{event_data['content']}\t{event_data['delay']}\n")
         f.write("\n")
 
     print(f"Preset '{name}' saved.")
@@ -466,14 +421,16 @@ def save_preset(name=None):
 
 # Function to rearrange events and adjust timings
 def rearrange_events():
+    global embedded_events
     rearrange_window = Toplevel(root)
     rearrange_window.iconbitmap(program_icon)
     rearrange_window.title("Rearrange Events")
     rearrange_window.geometry("500x700")
     event_listbox = Listbox(rearrange_window, selectmode=SINGLE, width=40, height=10)
     event_listbox.pack(pady=10)
-    for i, event in enumerate(events):
-        event_listbox.insert(END, f"Event {i + 1}: {event}")
+
+    for i, event_data in enumerate(embedded_events):
+        event_listbox.insert(END, f"Event {i + 1}: {event_data['position']}")
 
     delay_label = tk.Label(rearrange_window, text="Delay Between Rounds (ms):")
     delay_label.pack(pady=5)
@@ -499,21 +456,9 @@ def rearrange_events():
         if not selected_idx or selected_idx[0] == 0:
             return
         selected_idx = selected_idx[0]
-        events[selected_idx], events[selected_idx - 1] = (
-            events[selected_idx - 1],
-            events[selected_idx],
-        )
-        press_count[selected_idx], press_count[selected_idx - 1] = (
-            press_count[selected_idx - 1],
-            press_count[selected_idx],
-        )
-        click_type[selected_idx], click_type[selected_idx - 1] = (
-            click_type[selected_idx - 1],
-            click_type[selected_idx],
-        )
-        timing_data[selected_idx], timing_data[selected_idx - 1] = (
-            timing_data[selected_idx - 1],
-            timing_data[selected_idx],
+        embedded_events[selected_idx], embedded_events[selected_idx - 1] = (
+            embedded_events[selected_idx - 1],
+            embedded_events[selected_idx],
         )
         update_listbox()
         event_listbox.select_set(selected_idx - 1)
@@ -521,24 +466,12 @@ def rearrange_events():
 
     def move_down():
         selected_idx = event_listbox.curselection()
-        if not selected_idx or selected_idx[0] == len(events) - 1:
+        if not selected_idx or selected_idx[0] == len(embedded_events) - 1:
             return
         selected_idx = selected_idx[0]
-        events[selected_idx], events[selected_idx + 1] = (
-            events[selected_idx + 1],
-            events[selected_idx],
-        )
-        click_type[selected_idx], click_type[selected_idx + 1] = (
-            click_type[selected_idx + 1],
-            click_type[selected_idx],
-        )
-        press_count[selected_idx], press_count[selected_idx + 1] = (
-            press_count[selected_idx + 1],
-            press_count[selected_idx],
-        )
-        timing_data[selected_idx], timing_data[selected_idx + 1] = (
-            timing_data[selected_idx + 1],
-            timing_data[selected_idx],
+        embedded_events[selected_idx], embedded_events[selected_idx + 1] = (
+            embedded_events[selected_idx + 1],
+            embedded_events[selected_idx],
         )
         update_listbox()
         event_listbox.select_set(selected_idx + 1)
@@ -546,37 +479,39 @@ def rearrange_events():
 
     def update_listbox():
         event_listbox.delete(0, END)
-        for i, event in enumerate(events):
-            event_listbox.insert(END, f"Event {i + 1}: {event}")
+        for i, event_data in enumerate(embedded_events):
+            event_listbox.insert(END, f"Event {i + 1}: {event_data['position']}")
 
-    # Function to randomize all event times
     def randomize_all_times():
-        for i in range(len(timing_data)):
-            timing_data[i] = random.randint(50, 1000)
-            print(f"Randomized timing for Event {i + 1}: {timing_data[i]} ms")
+        for i in range(len(embedded_events)):
+            embedded_events[i]["delay"] = random.randint(50, 1000)
+            print(
+                f"Randomized timing for Event {i + 1}: {embedded_events[i]['delay']} ms"
+            )
         update_event_overlays()
 
     def open_detailed_window(idx):
         detailed_event_window = Toplevel(rearrange_window)
         detailed_event_window.iconbitmap(program_icon)
         detailed_event_window.title(f"Set Timeout for Event {idx + 1}")
+
         timeout_label = tk.Label(detailed_event_window, text="Timeout? (ms)")
         timeout_label.pack(pady=5)
         timeout_entry = tk.Entry(detailed_event_window)
         timeout_entry.pack(pady=5)
-        timeout_entry.insert(0, str(timing_data[idx]))
+        timeout_entry.insert(0, str(embedded_events[idx]["timing"]))
 
-        # Create a label for each question
         press_count_label = tk.Label(
             detailed_event_window, text="How many times to click:"
         )
         press_count_label.pack(pady=5)
         press_count_entry = tk.Entry(detailed_event_window)
         press_count_entry.pack(pady=5)
+        press_count_entry.insert(0, str(embedded_events[idx].get("press_count", 1)))
 
         options = ["left", "middle", "right"]
         clicked = tk.StringVar()
-        clicked.set("left")
+        clicked.set(embedded_events[idx].get("click_type", "left"))
 
         click_type_label = tk.Label(detailed_event_window, text="Type of Mouse Click")
         click_type_label.pack(pady=5)
@@ -585,39 +520,20 @@ def rearrange_events():
 
         def save_details():
             new_timeout = timeout_entry.get()
-
             try:
                 new_press_count = int(press_count_entry.get())
             except ValueError:
                 new_press_count = 1
 
             try:
-                timing_data[idx] = int(new_timeout)
-                press_count[idx] = int(new_press_count)
-                click_type[idx] = clicked.get()
-                print(f"Updated timing for Event {idx + 1}: {new_timeout} ms")
-                print(f"Updated Press Count for Event {idx + 1}: {new_press_count}")
-                print(f"Updated Click Type for Event {idx + 1}: {clicked.get()}")
+                embedded_events[idx]["delay"] = int(new_timeout)
+                embedded_events[idx]["press_count"] = new_press_count
+                embedded_events[idx]["click_type"] = clicked.get()
+                print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
                 update_listbox()
                 detailed_event_window.destroy()
             except ValueError:
                 print("Please enter a valid number for the detailed window.")
-
-            # Function to randomize timing for a specific event
-
-        def randomize_event_time(idx):
-            timing_data[idx] = random.randint(50, 1000)
-            print(f"Randomized timing for Event {idx + 1}: {timing_data[idx]} ms")
-            update_event_overlays()
-            detailed_event_window.destroy()
-
-        # Randomize Time Button
-        randomize_button = tk.Button(
-            detailed_event_window,
-            text="Randomize Time",
-            command=lambda: randomize_event_time(idx),
-        )
-        randomize_button.pack(pady=5)
 
         save_button = tk.Button(
             detailed_event_window, text="Save", command=save_details
@@ -625,23 +541,18 @@ def rearrange_events():
         save_button.pack(pady=10)
 
     def delete_all_events():
-        global events, timing_data, click_type, press_count, embedded_events
-        events = []
-        timing_data = []
-        click_type = []
-        press_count = []
+        global embedded_events
         embedded_events = []
         update_event_overlays()
         update_listbox()
 
-    delete_all_events = tk.Button(
+    delete_all_events_button = tk.Button(
         rearrange_window,
         text="Delete All Events (Can't Undo)",
         command=delete_all_events,
     )
-    delete_all_events.pack(pady=5)
+    delete_all_events_button.pack(pady=5)
 
-    # Button to randomize all event times
     randomize_all_button = tk.Button(
         rearrange_window,
         text="Randomize All Times (Override Instant Type)",
@@ -661,9 +572,7 @@ def rearrange_events():
         # List all .txt files in the presets directory
         presets = [f for f in os.listdir(presets_dir) if f.endswith(".txt")]
         for preset in presets:
-            listbox.insert(END, preset[:-4])  # Display file name without '.txt'
-
-            # Function to upload a preset
+            listbox.insert(END, preset[:-4])
 
         def upload_preset():
             file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
@@ -671,20 +580,18 @@ def rearrange_events():
                 file_name = os.path.basename(file_path)
                 new_file_path = os.path.join(presets_dir, file_name)
                 if not os.path.exists(new_file_path):
-                    os.rename(
-                        file_path, new_file_path
-                    )  # Move the file to the presets directory
+                    os.rename(file_path, new_file_path)
                     print(f"Preset from {file_path} uploaded successfully.")
                 else:
                     print(f"Preset already exists: {file_name}")
                 load_window.destroy()
 
         def load_selected():
-            global events, delay_between_rounds
+            global embedded_events, delay_between_rounds
             selected_preset = listbox.curselection()
             if selected_preset:
-                events = []
-                preset_name = listbox.get(selected_preset)  # Get the selected file name
+                embedded_events = []
+                preset_name = listbox.get(selected_preset)
                 preset_path = os.path.join(presets_dir, f"{preset_name}.txt")
                 with open(preset_path, "r") as f:
                     lines = f.readlines()
@@ -706,18 +613,29 @@ def rearrange_events():
                                     )
                                     if event.startswith("("):
                                         x, y = map(int, event.strip("()").split(","))
-                                        events.append((x, y))
-                                        click_type.append(temp_click_type)
-                                        press_count.append(temp_press_count)
+                                        embedded_events.append(
+                                            {
+                                                "type": "click",
+                                                "position": (x, y),
+                                                "click_type": temp_click_type,
+                                                "press_count": int(temp_press_count),
+                                                "delay": int(timing),
+                                            }
+                                        )
                                     else:
-                                        events.append(event)
-                                    timing_data.append(int(timing))
+                                        embedded_events.append(
+                                            {
+                                                "type": "text",
+                                                "content": event,
+                                                "delay": int(timing),
+                                            }
+                                        )
                 update_event_overlays()
                 load_window.destroy()
                 rearrange_window.destroy()
 
         def delete_selected():
-            global events
+            global embedded_events
             selected_preset = listbox.curselection()
             if selected_preset:
                 preset_name = listbox.get(selected_preset)
@@ -726,7 +644,7 @@ def rearrange_events():
                     os.remove(preset_path)
                     print(f"Deleted preset: {preset_name}")
                     listbox.delete(selected_preset)
-                    events = []
+                    embedded_events = []
                     update_event_overlays()
 
         load_button = tk.Button(
@@ -773,7 +691,6 @@ def rearrange_events():
     close_button.pack(pady=10)
 
 
-# Function to start the program
 def start_program():
     global is_running
     is_running = True
@@ -782,38 +699,37 @@ def start_program():
 
     def run_events():
         while is_running:
-            for i, event in enumerate(events):
+            for event_data in embedded_events:
                 if not is_running:
                     break
-                if isinstance(event, tuple):
-                    x, y = event
-                    temp_click_type = click_type[i]
-                    temp_press_count = press_count[i]
+                if event_data["type"] == "click":
+                    print(embedded_events)
+                    x, y = event_data["position"]
+                    temp_click_type = event_data["click_type"]
+                    temp_press_count = event_data["press_count"]
                     pyautogui.click(
                         x, y, button=str(temp_click_type), clicks=int(temp_press_count)
                     )
                     print(
                         f"Clicked {temp_click_type} {temp_press_count} time(s) at position: ({x}, {y})"
                     )
-                    time.sleep(timing_data[i] / 1000)
-                elif isinstance(event, str):
-                    if timing_data[i] == 0:
-                        pyperclip.copy(event)
+                    time.sleep(event_data["delay"] / 1000)
+                elif event_data["type"] == "text":
+                    if event_data["delay"] == 0:
+                        pyperclip.copy(event_data["content"])
                         pyautogui.hotkey("ctrl", "v")
                     else:
-                        type_text(event, timing_data[i] / 1000)
-                    print(f"Typed text: {event}")
-            time.sleep(delay_between_rounds / 1000)  # Use the adjustable delay
+                        type_text(event_data["content"], event_data["delay"] / 1000)
+                    print(f"Typed text: {event_data['content']}")
+            time.sleep(delay_between_rounds / 1000)
 
     thread = threading.Thread(target=run_events)
     thread.start()
 
-    # Monitor for space key press to stop the program
     monitor_space_key()
 
 
-# Function to simulate typing text with pyautogui.press() for finer control
-def type_text(text, interval):
+def type_text(text, delay):
     i = 0
     while i < len(text):
         char = text[i]
@@ -836,7 +752,7 @@ def type_text(text, interval):
         else:
             pyautogui.press(char)
         i += 1
-        time.sleep(interval)  # Control the interval between key presses
+        time.sleep(delay)
 
 
 # Function to stop the program
@@ -860,14 +776,11 @@ def monitor_space_key():
 
 # Function to delete a preset file from the "Presets" directory
 def delete_preset(name):
-    # Create the directory if it doesn't exist
     if not os.path.exists(presets_dir):
         os.makedirs(presets_dir)
 
-    # Create the file path for the preset to be deleted
     file_path = os.path.join(presets_dir, f"{name}.txt")
 
-    # Attempt to delete the file
     try:
         if os.path.isfile(file_path):
             os.remove(file_path)
@@ -878,9 +791,7 @@ def delete_preset(name):
         print(f"Error deleting preset '{name}': {e}")
 
 
-# Function to update the "Last save" preset
 def update_last_save_preset():
-    # Create the directory if it doesn't exist
     if not os.path.exists(presets_dir):
         os.makedirs(presets_dir)
 
@@ -895,22 +806,16 @@ def update_last_save_preset():
 def close_and_save():
     print("Updating 'Last save' preset...")
 
-    # Update the "Last save" preset in the presets file
     update_last_save_preset()
 
     print("Closing program.")
     root.quit()
 
 
-# Create the main window
 root = tk.Tk()
 root.title("Event Controller")
-
-root.iconbitmap(program_icon)  # Set the window icon
-
-root.attributes("-alpha", 0.85)  # Semi-transparent
-
-# Set window size
+root.iconbitmap(program_icon)
+root.attributes("-alpha", 0.85)
 root.geometry("225x325")
 
 
@@ -930,13 +835,11 @@ def on_drag_motion(event):
 root.bind("<Button-1>", on_drag_start)
 root.bind("<B1-Motion>", on_drag_motion)
 root.bind("<Control-z>", lambda event: undo())
-root.bind("<Control-Z>", lambda event: undo())  # For Windows case-sensitivity
+root.bind("<Control-Z>", lambda event: undo())
 root.bind("<Control-Shift-Z>", lambda event: redo())
 
-# Overlay window for event numbers
 overlay = create_overlay()
 
-# Create buttons
 create_button = tk.Button(root, text="Create Event", command=create_event)
 create_button.pack(pady=10)
 
