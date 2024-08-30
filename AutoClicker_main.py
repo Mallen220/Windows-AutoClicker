@@ -205,21 +205,33 @@ def create_event():
         else:
             stop_text_input()
     else:
-        if is_text_mode:
-            return
-        print("Waiting for 'space' key press to create the event...")
-        keyboard.wait("space")
-        x, y = pyautogui.position()
+        if keyboard.is_pressed("shift"):
+            print("Waiting for 'space' key press to create the scroll event...")
+            keyboard.wait("space")
+            x, y = pyautogui.position()
 
-        new_event = embedded_events.append(
-            {
-                "type": "click",
-                "position": (x, y),
-                "click_type": "left",
-                "press_count": 1,
-                "delay": 100,
-            }
-        )
+            new_event = embedded_events.append(
+                {
+                    "type": "scroll",
+                    "position": (x, y),
+                    "press_count": 300,
+                    "delay": 100,
+                }
+            )
+        else:
+            print("Waiting for 'space' key press to create the event...")
+            keyboard.wait("space")
+            x, y = pyautogui.position()
+
+            new_event = embedded_events.append(
+                {
+                    "type": "click",
+                    "position": (x, y),
+                    "click_type": "left",
+                    "press_count": 1,
+                    "delay": 100,
+                }
+            )
         print(f"Event created at position: ({x}, {y})")
 
         add_to_undo_stack(("create", new_event))
@@ -314,7 +326,7 @@ def update_event_overlays():
         label.destroy()
 
     for event_num, event in enumerate(embedded_events, 1):
-        if event["type"] == "click":
+        if event["type"] == "click" or event["type"] == "scroll":
             x, y = event["position"]
             create_event_overlay(event_num, x, y)
         elif event["type"] == "text":
@@ -343,6 +355,10 @@ def create_event_overlay(event_num, x, y):
             label_color = (
                 "purple" if embedded_events[event_num]["type"] == "text" else "red"
             )
+            try:
+                label_color = "yellow" if event["type"] == "scroll" else "red"
+            except:
+                label_color = "red"
         except:
             label_color = "red"
 
@@ -411,6 +427,10 @@ def save_preset(name=None):
             if event_data["type"] == "click":
                 f.write(
                     f"{event_data['position']}\t{event_data['delay']}\t{event_data['click_type']}\t{event_data['press_count']}\n"
+                )
+            elif event_data["type"] == "scroll":
+                f.write(
+                    f"{event_data['position']}\t{event_data['delay']}\t{event_data['press_count']}\tscroll\n"
                 )
             elif event_data["type"] == "text":
                 f.write(f"{event_data['content']}\t{event_data['delay']}\n")
@@ -523,7 +543,10 @@ def rearrange_events():
             try:
                 new_press_count = int(press_count_entry.get())
             except ValueError:
-                new_press_count = 1
+                if embedded_events[idx]["type"] == "scroll":
+                    new_press_count = 300
+                else:
+                    new_press_count = 1
 
             try:
                 embedded_events[idx]["delay"] = int(new_timeout)
@@ -622,6 +645,16 @@ def rearrange_events():
                                                 "delay": int(timing),
                                             }
                                         )
+                                    elif event.endswith("scroll"):
+                                        x, y = map(int, event.strip("()").split(","))
+                                        embedded_events.append(
+                                            {
+                                                "type": "scroll",
+                                                "position": (x, y),
+                                                "press_count": int(temp_press_count),
+                                                "delay": int(timing),
+                                            }
+                                        )
                                     else:
                                         embedded_events.append(
                                             {
@@ -711,6 +744,14 @@ def start_program():
                     )
                     print(
                         f"Clicked {temp_click_type} {temp_press_count} time(s) at position: ({x}, {y})"
+                    )
+                    time.sleep(event_data["delay"] / 1000)
+                elif event_data["type"] == "scroll":
+                    x, y = event_data["position"]
+                    temp_press_count = event_data["press_count"]
+                    pyautogui.scroll(temp_press_count, x=x, y=y)
+                    print(
+                        f"Scrolled {temp_press_count} time(s) at position: ({x}, {y})"
                     )
                     time.sleep(event_data["delay"] / 1000)
                 elif event_data["type"] == "text":
