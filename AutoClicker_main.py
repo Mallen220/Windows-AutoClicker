@@ -499,7 +499,7 @@ def rearrange_events():
         timeout_label.pack(pady=5)
         timeout_entry = tk.Entry(detailed_event_window)
         timeout_entry.pack(pady=5)
-        timeout_entry.insert(0, str(embedded_events[idx]["timing"]))
+        timeout_entry.insert(0, str(embedded_events[idx]["delay"]))
 
         press_count_label = tk.Label(
             detailed_event_window, text="How many times to click:"
@@ -815,7 +815,7 @@ root = tk.Tk()
 root.title("Event Controller")
 root.iconbitmap(program_icon)
 root.attributes("-alpha", 0.85)
-root.geometry("225x325")
+root.geometry("225x350")
 
 
 # Function to enable dragging the window by clicking anywhere
