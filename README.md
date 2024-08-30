@@ -94,12 +94,10 @@ The **AutoClicker Program** is a versatile automation tool that allows users to 
 ## TODO List
 
 1. **Add support for drag-and-drop events**.
-2. **Implement event grouping to perform multi-click actions**.
-3. **Improve error handling when entering incorrect input in text input mode**.
-4. **Optimize event overlay for higher performance on large screens**.
-5. **Implement undo/redo functionality for event management**.
-6. **Enable conditional events (e.g., click only if a certain condition is met)**.
-7. **Allow random delays between events for more natural interaction**.
-8. **Support additional input devices like joysticks and gamepads**.
-9. **Provide an option for automatic screen recording during event sequences**.
-10. **Add hotkey customization for more flexible controls**.
+2. **Improve error handling when entering incorrect input in text input mode**.
+3. **Optimize event overlay for higher performance on large screens**.
+4. **Enable conditional events (e.g., click only if a certain condition is met)**.
+5. **Allow random delays between events for more natural interaction**.
+6. **Support additional input devices like joysticks and gamepads**.
+7. **Provide an option for automatic screen recording during event sequences**.
+8. **Add hotkey customization for more flexible controls**.
