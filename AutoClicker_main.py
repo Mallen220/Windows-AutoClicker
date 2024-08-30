@@ -374,7 +374,7 @@ def open_text_input():
     input_window = Toplevel(root)
     input_window.iconbitmap(program_icon)
     input_window.title("Enter Text")
-    input_window.geometry("500x250")
+    input_window.geometry("500x350")
     label = tk.Label(
         input_window, text="Enter text to simulate (Press 'Enter' for new line):"
     )
@@ -386,23 +386,42 @@ def open_text_input():
     instant_type_check = tk.Checkbutton(
         input_window, text="Instant Type", variable=instant_type_var
     )
+
     instant_type_check.pack(pady=5)
+    copy_button = tk.Button(
+        input_window,
+        text="Set to copy selection",
+        command=lambda: set_text_input("Copy"),
+    )
+    copy_button.pack(pady=5)
+    paste_button = tk.Button(
+        input_window,
+        text="Set to paste at cursor",
+        command=lambda: set_text_input("Paste"),
+    )
+    paste_button.pack(pady=5)
     save_button = tk.Button(input_window, text="Save Text", command=save_text)
     save_button.pack(pady=5)
 
 
+def set_text_input(text):
+    text_box.delete(1.0, END)
+    text_box.insert(END, text)
+    save_text()
+
+
 # Function to save text from the input box and close the window
 def save_text():
+    text = text_box.get("1.0", tk.END).strip()
     global is_text_mode
-    user_text = text_box.get("1.0", tk.END).strip()
-    if user_text:
+    if text:
         event_data = {
             "type": "text",
-            "content": user_text,
+            "content": text,
             "delay": 0 if instant_type_var.get() else 100,
         }
         embedded_events.append(event_data)
-        print(f"Text event created: {user_text}")
+        print(f"Text event created: {text}")
     input_window.destroy()
     is_text_mode = False
     print("Text input mode exited.")
@@ -450,7 +469,10 @@ def rearrange_events():
     event_listbox.pack(pady=10)
 
     for i, event_data in enumerate(embedded_events):
-        event_listbox.insert(END, f"Event {i + 1}: {event_data['position']}")
+        if event_data["type"] == "click" or event_data["type"] == "scroll":
+            event_listbox.insert(END, f"Event {i + 1}: {event_data['position']}")
+        elif event_data["type"] == "text":
+            event_listbox.insert(END, f"Event {i + 1}: {event_data['content']}")
 
     delay_label = tk.Label(rearrange_window, text="Delay Between Rounds (ms):")
     delay_label.pack(pady=5)
@@ -755,7 +777,11 @@ def start_program():
                     )
                     time.sleep(event_data["delay"] / 1000)
                 elif event_data["type"] == "text":
-                    if event_data["delay"] == 0:
+                    if event_data["content"] == "Copy":
+                        pyautogui.hotkey("ctrl", "c")
+                    elif event_data["content"] == "Paste":
+                        pyautogui.hotkey("ctrl", "v")
+                    elif event_data["delay"] == 0:
                         pyperclip.copy(event_data["content"])
                         pyautogui.hotkey("ctrl", "v")
                     else:
