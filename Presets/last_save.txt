@@ -1,4 +1,3 @@
 - last_save
 Delay: 500
-(995, 354)	100	left	1
 
