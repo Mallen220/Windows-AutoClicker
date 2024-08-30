@@ -711,7 +711,7 @@ def start_program():
                     )
                     print(
                         f"Clicked {temp_click_type} {temp_press_count} time(s) at position: ({x}, {y})"
-                    ) 
+                    )
                     time.sleep(event_data["delay"] / 1000)
                 elif event_data["type"] == "text":
                     if event_data["delay"] == 0:
