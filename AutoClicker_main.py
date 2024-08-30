@@ -16,6 +16,9 @@ import pyperclip
 # Global lists to store events and their timings
 events = []
 timing_data = []
+click_type = []  # Double, Right, Left, Copy, Paste, Middle, Scroll
+press_count = []
+
 undo_stack = []  # Stack to store undo actions
 redo_stack = []  # Stack to store redo actions
 max_undo_redo = 25  # Limit to the number of undo/redo actions
@@ -25,11 +28,7 @@ overlay_active = True  # Overlay state
 is_text_mode = False
 delay_between_rounds = 500  # Default delay in milliseconds
 
-# Embed default events directly into the code (as an example)
-embedded_events = [
-    {"type": "click", "position": (100, 200), "delay": 100},
-    {"type": "text", "content": "Hello World", "delay": 200},
-]
+embedded_events = []
 
 # Determine the path to the icon and presets directory
 if getattr(sys, "frozen", False):
@@ -171,15 +170,16 @@ special_keys = {
 
 
 # Function to modify an event
-def modify_event(index, new_event, new_timing):
+def modify_event(index, new_event, new_timing, new_click_type, new_press_count):
     if 0 <= index < len(events):
         events[index] = new_event
         timing_data[index] = new_timing
+        click_type[index] = new_click_type
+        press_count[index] = new_press_count
         save_events()
         print(f"Event {index + 1} modified: {new_event}, Delay: {new_timing}ms")
 
 
-# Function to save events back to the internal structure
 # Function to save events back to the internal structure
 def save_events():
     global embedded_events
@@ -187,7 +187,13 @@ def save_events():
     for i, event in enumerate(events):
         if isinstance(event, tuple):
             embedded_events.append(
-                {"type": "click", "position": event, "delay": timing_data[i]}
+                {
+                    "type": "click",
+                    "position": event,
+                    "Button": click_type[i],
+                    "Count": press_count[i],
+                    "delay": timing_data[i],
+                }
             )
         elif isinstance(event, str):
             embedded_events.append(
@@ -201,6 +207,8 @@ def load_embedded_events():
     for event in embedded_events:
         if event["type"] == "click":
             events.append((event["position"]))
+            click_type.append((event["Button"]))
+            press_count.append((event["Count"]))
         elif event["type"] == "text":
             events.append(event["content"])
         timing_data.append(event["delay"])
@@ -238,6 +246,8 @@ def create_event():
         keyboard.wait("space")
         x, y = pyautogui.position()
         events.append((x, y))
+        click_type.append("left")
+        press_count.append(1)
         timing_data.append(100)  # Default wait time in milliseconds
         print(f"Event created at position: ({x}, {y})")
 
@@ -261,6 +271,8 @@ def stop_text_input():
 def delete_newest_event():
     if events:
         deleted_event = events.pop()
+        click_type.pop()
+        press_count.pop()
         timing_data.pop()
         print(f"Deleted event at position: {deleted_event}")
 
@@ -306,6 +318,8 @@ def redo():
         if action_type == "create":
             # Redo creation (recreate the event)
             events.append(event)
+            click_type.append("left")
+            press_count.append(1)
             timing_data.append(100)  # Default wait time
             print(f"Redid creation of event at position: {event}")
             add_to_undo_stack(("create", event))
@@ -314,6 +328,8 @@ def redo():
             if event in events:
                 index = events.index(event)
                 events.pop(index)
+                click_type.pop()
+                press_count.pop()
                 timing_data.pop(index)
                 print(f"Redid deletion of event at position: {event}")
                 add_to_undo_stack(("delete", event))
@@ -434,11 +450,15 @@ def save_preset(name=None):
     with open(preset_path, "w") as f:
         f.write(f"- {name}\n")
         f.write(f"Delay: {delay_between_rounds}\n")
+        i = 0
         for event, timing in zip(events, timing_data):
             if isinstance(event, tuple):
-                f.write(f"{event}\t{timing}\n")
+                f.write(
+                    f"{event}\t{timing}\t{str(click_type[i])}\t{int(press_count[i])}\n"
+                )
             elif isinstance(event, str):
                 f.write(f"{event}\t{timing}\n")
+            i = i + 1
         f.write("\n")
 
     print(f"Preset '{name}' saved.")
@@ -449,7 +469,7 @@ def rearrange_events():
     rearrange_window = Toplevel(root)
     rearrange_window.iconbitmap(program_icon)
     rearrange_window.title("Rearrange Events")
-    rearrange_window.geometry("500x650")
+    rearrange_window.geometry("500x700")
     event_listbox = Listbox(rearrange_window, selectmode=SINGLE, width=40, height=10)
     event_listbox.pack(pady=10)
     for i, event in enumerate(events):
@@ -483,6 +503,14 @@ def rearrange_events():
             events[selected_idx - 1],
             events[selected_idx],
         )
+        press_count[selected_idx], press_count[selected_idx - 1] = (
+            press_count[selected_idx - 1],
+            press_count[selected_idx],
+        )
+        click_type[selected_idx], click_type[selected_idx - 1] = (
+            click_type[selected_idx - 1],
+            click_type[selected_idx],
+        )
         timing_data[selected_idx], timing_data[selected_idx - 1] = (
             timing_data[selected_idx - 1],
             timing_data[selected_idx],
@@ -499,6 +527,14 @@ def rearrange_events():
         events[selected_idx], events[selected_idx + 1] = (
             events[selected_idx + 1],
             events[selected_idx],
+        )
+        click_type[selected_idx], click_type[selected_idx + 1] = (
+            click_type[selected_idx + 1],
+            click_type[selected_idx],
+        )
+        press_count[selected_idx], press_count[selected_idx + 1] = (
+            press_count[selected_idx + 1],
+            press_count[selected_idx],
         )
         timing_data[selected_idx], timing_data[selected_idx + 1] = (
             timing_data[selected_idx + 1],
@@ -520,25 +556,52 @@ def rearrange_events():
             print(f"Randomized timing for Event {i + 1}: {timing_data[i]} ms")
         update_event_overlays()
 
-    def open_timeout_window(idx):
-        timeout_window = Toplevel(rearrange_window)
-        timeout_window.iconbitmap(program_icon)
-        timeout_window.title(f"Set Timeout for Event {idx + 1}")
-        label = tk.Label(timeout_window, text="Timeout? (ms)")
-        label.pack(pady=5)
-        timeout_entry = tk.Entry(timeout_window)
+    def open_detailed_window(idx):
+        detailed_event_window = Toplevel(rearrange_window)
+        detailed_event_window.iconbitmap(program_icon)
+        detailed_event_window.title(f"Set Timeout for Event {idx + 1}")
+        timeout_label = tk.Label(detailed_event_window, text="Timeout? (ms)")
+        timeout_label.pack(pady=5)
+        timeout_entry = tk.Entry(detailed_event_window)
         timeout_entry.pack(pady=5)
         timeout_entry.insert(0, str(timing_data[idx]))
 
-        def save_timeout():
+        # Create a label for each question
+        press_count_label = tk.Label(
+            detailed_event_window, text="How many times to click:"
+        )
+        press_count_label.pack(pady=5)
+        press_count_entry = tk.Entry(detailed_event_window)
+        press_count_entry.pack(pady=5)
+
+        options = ["left", "middle", "right"]
+        clicked = tk.StringVar()
+        clicked.set("left")
+
+        click_type_label = tk.Label(detailed_event_window, text="Type of Mouse Click")
+        click_type_label.pack(pady=5)
+        click_type_entry = tk.OptionMenu(detailed_event_window, clicked, *options)
+        click_type_entry.pack(pady=5)
+
+        def save_details():
             new_timeout = timeout_entry.get()
+
+            try:
+                new_press_count = int(press_count_entry.get())
+            except ValueError:
+                new_press_count = 1
+
             try:
                 timing_data[idx] = int(new_timeout)
+                press_count[idx] = int(new_press_count)
+                click_type[idx] = clicked.get()
                 print(f"Updated timing for Event {idx + 1}: {new_timeout} ms")
+                print(f"Updated Press Count for Event {idx + 1}: {new_press_count}")
+                print(f"Updated Click Type for Event {idx + 1}: {clicked.get()}")
                 update_listbox()
-                timeout_window.destroy()
+                detailed_event_window.destroy()
             except ValueError:
-                print("Please enter a valid number for the timeout.")
+                print("Please enter a valid number for the detailed window.")
 
             # Function to randomize timing for a specific event
 
@@ -546,23 +609,27 @@ def rearrange_events():
             timing_data[idx] = random.randint(50, 1000)
             print(f"Randomized timing for Event {idx + 1}: {timing_data[idx]} ms")
             update_event_overlays()
-            timeout_window.destroy()
+            detailed_event_window.destroy()
 
         # Randomize Time Button
         randomize_button = tk.Button(
-            timeout_window,
+            detailed_event_window,
             text="Randomize Time",
             command=lambda: randomize_event_time(idx),
         )
         randomize_button.pack(pady=5)
 
-        save_button = tk.Button(timeout_window, text="Save", command=save_timeout)
+        save_button = tk.Button(
+            detailed_event_window, text="Save", command=save_details
+        )
         save_button.pack(pady=10)
 
     def delete_all_events():
-        global events, timing_data, embedded_events
+        global events, timing_data, click_type, press_count, embedded_events
         events = []
         timing_data = []
+        click_type = []
+        press_count = []
         embedded_events = []
         update_event_overlays()
         update_listbox()
@@ -633,11 +700,15 @@ def rearrange_events():
                                 delay_between_rounds = int(line.split(":")[1].strip())
                             else:
                                 event_data = line.split("\t")
-                                if len(event_data) >= 2:
-                                    event, timing = event_data[:2]
+                                if len(event_data) >= 4:
+                                    event, timing, temp_click_type, temp_press_count = (
+                                        event_data[:4]
+                                    )
                                     if event.startswith("("):
                                         x, y = map(int, event.strip("()").split(","))
                                         events.append((x, y))
+                                        click_type.append(temp_click_type)
+                                        press_count.append(temp_press_count)
                                     else:
                                         events.append(event)
                                     timing_data.append(int(timing))
@@ -673,10 +744,10 @@ def rearrange_events():
         )
         delete_button.pack(pady=10)
 
-    def on_double_click():
+    def on_double_click(useless):
         selected_idx = event_listbox.curselection()
         if selected_idx:
-            open_timeout_window(selected_idx[0])
+            open_detailed_window(selected_idx[0])
 
     event_listbox.bind("<Double-Button-1>", on_double_click)
 
@@ -716,8 +787,14 @@ def start_program():
                     break
                 if isinstance(event, tuple):
                     x, y = event
-                    pyautogui.click(x, y)
-                    print(f"Clicked at position: ({x}, {y})")
+                    temp_click_type = click_type[i]
+                    temp_press_count = press_count[i]
+                    pyautogui.click(
+                        x, y, button=str(temp_click_type), clicks=int(temp_press_count)
+                    )
+                    print(
+                        f"Clicked {temp_click_type} {temp_press_count} time(s) at position: ({x}, {y})"
+                    )
                     time.sleep(timing_data[i] / 1000)
                 elif isinstance(event, str):
                     if timing_data[i] == 0:
