@@ -96,6 +96,5 @@ The **AutoClicker Program** is a versatile automation tool that allows users to 
 1. **Improve error handling when entering incorrect input in text input mode**.
 2. **Optimize event overlay for large screens and 2 screens**.
 3. **Enable conditional events (e.g., click only if a certain condition is met)**.
-4. **Allow random delays between events for more natural interaction**.
-5. **Provide an option for automatic screen recording during event sequences**.
-6. **Add hotkey customization for more flexible controls**.
+4. **Provide an option for automatic screen recording during event sequences**.
+5. **Add hotkey customization for more flexible controls**.

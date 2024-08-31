@@ -615,7 +615,7 @@ def rearrange_events():
                     new_press_count = 300
                 else:
                     new_press_count = 1
- 
+
             try:
                 embedded_events[idx]["delay"] = int(new_timeout)
                 embedded_events[idx]["press_count"] = new_press_count
