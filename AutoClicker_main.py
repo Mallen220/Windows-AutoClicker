@@ -424,17 +424,23 @@ def set_text_input(text):
 
 # Function to save text from the input box and close the window
 def save_text():
-    text = text_box.get("1.0", tk.END).strip()
     global is_text_mode
-    if text:
-        event_data = {
-            "type": "text",
-            "content": text,
-            "delay": 0 if instant_type_var.get() else 100,
-            "random_time": False,
-        }
-        embedded_events.append(event_data)
-        print(f"Text event created: {text}")
+    try:
+        text = text_box.get("1.0", tk.END).strip()
+        if text:
+            event_data = {
+                "type": "text",
+                "content": text,
+                "delay": 0 if instant_type_var.get() else 100,
+                "random_time": False,
+            }
+            embedded_events.append(event_data)
+            print(f"Text event created: {text}")
+    except Exception as e:
+        print(e)
+        print(
+            "An Error has occurred while saving text (Maybe bad text?). No text will be saved and the menu will be closed."
+        )
     input_window.destroy()
     is_text_mode = False
     print("Text input mode exited.")
