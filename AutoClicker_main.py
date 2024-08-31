@@ -20,6 +20,8 @@ always_on_top = False
 overlay_active = True
 is_text_mode = False
 delay_between_rounds = 500  # Default delay in milliseconds
+min_random_time = 50
+max_random_time = 4000
 
 embedded_events = []
 
@@ -163,7 +165,12 @@ special_keys = {
 
 # Function to modify an event
 def modify_event(
-    index, new_event, new_timing, new_click_type=None, new_press_count=None
+    index,
+    new_event,
+    new_timing,
+    new_click_type=None,
+    new_press_count=None,
+    new_random_time=None,
 ):
     if 0 <= index < len(embedded_events):
         if isinstance(embedded_events[index], dict):
@@ -173,6 +180,10 @@ def modify_event(
                     embedded_events[index]["delay"] = new_timing
                     if new_click_type is not None:
                         embedded_events[index]["click_type"] = new_click_type
+                    if new_random_time is not None:
+                        embedded_events[index]["random_time"] = new_random_time
+                    else:
+                        embedded_events[index]["random_time"] = False
                     if new_press_count is not None:
                         embedded_events[index]["press_count"] = new_press_count
                 elif embedded_events[index]["type"] == "text":
@@ -215,6 +226,7 @@ def create_event():
                     "position": (x, y),
                     "press_count": 300,
                     "delay": 100,
+                    "random_time": False,
                 }
             )
         else:
@@ -229,6 +241,7 @@ def create_event():
                     "click_type": "left",
                     "press_count": 1,
                     "delay": 100,
+                    "random_time": False,
                 }
             )
         print(f"Event created at position: ({x}, {y})")
@@ -418,6 +431,7 @@ def save_text():
             "type": "text",
             "content": text,
             "delay": 0 if instant_type_var.get() else 100,
+            "random_time": False,
         }
         embedded_events.append(event_data)
         print(f"Text event created: {text}")
@@ -444,14 +458,16 @@ def save_preset(name=None):
         for event_data in embedded_events:
             if event_data["type"] == "click":
                 f.write(
-                    f"{event_data['position']}\t{event_data['delay']}\t{event_data['click_type']}\t{event_data['press_count']}\n"
+                    f"{event_data['position']}\t{event_data['delay']}\t{event_data['click_type']}\t{event_data['press_count']}\t{event_data['random_time']}\n"
                 )
             elif event_data["type"] == "scroll":
                 f.write(
-                    f"{event_data['position']}\t{event_data['delay']}\t{event_data['press_count']}\tscroll\n"
+                    f"{event_data['position']}\t{event_data['delay']}\t{event_data['press_count']}\t{event_data['random_time']}\tscroll\n"
                 )
             elif event_data["type"] == "text":
-                f.write(f"{event_data['content']}\t{event_data['delay']}\n")
+                f.write(
+                    f"{event_data['content']}\t{event_data['delay']}\t{event_data['random_time']}\n"
+                )
         f.write("\n")
 
     print(f"Preset '{name}' saved.")
@@ -525,10 +541,8 @@ def rearrange_events():
 
     def randomize_all_times():
         for i in range(len(embedded_events)):
-            embedded_events[i]["delay"] = random.randint(50, 1000)
-            print(
-                f"Randomized timing for Event {i + 1}: {embedded_events[i]['delay']} ms"
-            )
+            embedded_events[i]["random_time"] = True
+            print(f"Randomized timing for Event {i + 1}: True")
         update_event_overlays()
 
     def open_detailed_window(idx):
@@ -558,6 +572,12 @@ def rearrange_events():
         click_type_label.pack(pady=5)
         click_type_entry = tk.OptionMenu(detailed_event_window, clicked, *options)
         click_type_entry.pack(pady=5)
+
+        random_time_var = tk.BooleanVar()
+        random_time_check = tk.Checkbutton(
+            detailed_event_window, text="Random time", variable=random_time_var
+        )
+        random_time_check.pack(pady=5)
 
         def move_selected_event():
             print("Waiting for 'space' key press to move the event...")
@@ -595,11 +615,12 @@ def rearrange_events():
                     new_press_count = 300
                 else:
                     new_press_count = 1
-
+ 
             try:
                 embedded_events[idx]["delay"] = int(new_timeout)
                 embedded_events[idx]["press_count"] = new_press_count
                 embedded_events[idx]["click_type"] = clicked.get()
+                embedded_events[idx]["random_time"] = random_time_var.get()
                 print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
                 update_listbox()
                 detailed_event_window.destroy()
@@ -626,7 +647,7 @@ def rearrange_events():
 
     randomize_all_button = tk.Button(
         rearrange_window,
-        text="Randomize All Times (Override Instant Type)",
+        text="Randomize All Times",
         command=randomize_all_times,
     )
     randomize_all_button.pack(pady=5)
@@ -678,10 +699,14 @@ def rearrange_events():
                                 delay_between_rounds = int(line.split(":")[1].strip())
                             else:
                                 event_data = line.split("\t")
-                                if len(event_data) >= 4:
-                                    event, timing, temp_click_type, temp_press_count = (
-                                        event_data[:4]
-                                    )
+                                if len(event_data) >= 5:
+                                    (
+                                        event,
+                                        timing,
+                                        temp_click_type,
+                                        temp_press_count,
+                                        temp_random_timing,
+                                    ) = event_data[:5]
                                     if event.startswith("("):
                                         x, y = map(int, event.strip("()").split(","))
                                         embedded_events.append(
@@ -691,6 +716,7 @@ def rearrange_events():
                                                 "click_type": temp_click_type,
                                                 "press_count": int(temp_press_count),
                                                 "delay": int(timing),
+                                                "random_time": bool(temp_random_timing),
                                             }
                                         )
                                     elif event.endswith("scroll"):
@@ -701,6 +727,7 @@ def rearrange_events():
                                                 "position": (x, y),
                                                 "press_count": int(temp_press_count),
                                                 "delay": int(timing),
+                                                "random_time": bool(temp_random_timing),
                                             }
                                         )
                                     else:
@@ -709,6 +736,7 @@ def rearrange_events():
                                                 "type": "text",
                                                 "content": event,
                                                 "delay": int(timing),
+                                                "random_time": bool(temp_random_timing),
                                             }
                                         )
                 update_event_overlays()
@@ -772,6 +800,15 @@ def rearrange_events():
     close_button.pack(pady=10)
 
 
+def random_time_in_range(min_time=None, max_time=None):
+    if min_time is None:
+        min_time = 50
+    if max_time is None:
+        max_time = 4000
+
+    return random.randint(min_time, max_time) / 1000
+
+
 def start_program():
     global is_running
     is_running = True
@@ -793,7 +830,12 @@ def start_program():
                     print(
                         f"Clicked {temp_click_type} {temp_press_count} time(s) at position: ({x}, {y})"
                     )
-                    time.sleep(event_data["delay"] / 1000)
+                    if event_data["random_time"]:
+                        time.sleep(
+                            random_time_in_range(min_random_time, max_random_time)
+                        )
+                    else:
+                        time.sleep(event_data["delay"] / 1000)
                 elif event_data["type"] == "scroll":
                     x, y = event_data["position"]
                     temp_press_count = event_data["press_count"]
@@ -801,7 +843,12 @@ def start_program():
                     print(
                         f"Scrolled {temp_press_count} time(s) at position: ({x}, {y})"
                     )
-                    time.sleep(event_data["delay"] / 1000)
+                    if event_data["random_time"]:
+                        time.sleep(
+                            random_time_in_range(min_random_time, max_random_time)
+                        )
+                    else:
+                        time.sleep(event_data["delay"] / 1000)
                 elif event_data["type"] == "text":
                     if event_data["content"] == "Copy":
                         pyautogui.hotkey("ctrl", "c")
@@ -811,9 +858,18 @@ def start_program():
                         pyperclip.copy(event_data["content"])
                         pyautogui.hotkey("ctrl", "v")
                     else:
-                        type_text(event_data["content"], event_data["delay"] / 1000)
+                        type_text(
+                            event_data["content"],
+                            (
+                                (event_data["delay"] / 1000)
+                                if not event_data["random_time"]
+                                else random_time_in_range(
+                                    min_random_time, max_random_time
+                                )
+                            ),
+                        )
                     print(f"Typed text: {event_data['content']}")
-            time.sleep(delay_between_rounds / 1000)
+            time.sleep(random_time_in_range(400, 3000) / 1000)
 
     thread = threading.Thread(target=run_events)
     thread.start()
