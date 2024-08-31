@@ -559,6 +559,33 @@ def rearrange_events():
         click_type_entry = tk.OptionMenu(detailed_event_window, clicked, *options)
         click_type_entry.pack(pady=5)
 
+        def move_selected_event():
+            print("Waiting for 'space' key press to move the event...")
+            keyboard.wait("space")
+            x, y = pyautogui.position()
+
+            if embedded_events[idx]["type"] == "click":
+                embedded_events[idx] = {
+                    "type": "click",
+                    "position": (x, y),
+                    "click_type": embedded_events[idx]["click_type"],
+                    "press_count": embedded_events[idx]["press_count"],
+                    "delay": embedded_events[idx]["delay"],
+                }
+            elif embedded_events[idx]["type"] == "scroll":
+                embedded_events[idx] = {
+                    "type": "scroll",
+                    "position": (x, y),
+                    "press_count": embedded_events[idx]["press_count"],
+                    "delay": embedded_events[idx]["delay"],
+                }
+            update_event_overlays()
+
+        move_event = tk.Button(
+            detailed_event_window, text="Move Event", command=move_selected_event
+        )
+        move_event.pack(pady=10)
+
         def save_details():
             new_timeout = timeout_entry.get()
             try:
