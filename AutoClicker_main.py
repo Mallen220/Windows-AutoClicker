@@ -12,7 +12,6 @@ import pyperclip
 
 # pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "Presets;Presets" AutoClicker_main.py
 
-# Double, Right, Left, Copy, Paste, Middle, Scroll
 undo_stack = []
 redo_stack = []
 max_undo_redo = 25  # Limit to the number of undo/redo actions
