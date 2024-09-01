@@ -533,18 +533,7 @@ def save_preset(name=None):
         f.write(f"- {name}\n")
         f.write(f"Delay: {delay_between_rounds}\n")
         for event_data in embedded_events:
-            if event_data["type"] == "click":
-                f.write(
-                    f"{event_data['position']}\t{event_data['delay']}\t{event_data['click_type']}\t{event_data['press_count']}\t{event_data['random_time']}\n"
-                )
-            elif event_data["type"] == "scroll":
-                f.write(
-                    f"{event_data['position']}\t{event_data['delay']}\t{event_data['press_count']}\t{event_data['random_time']}\tscroll\n"
-                )
-            elif event_data["type"] == "text":
-                f.write(
-                    f"{event_data['content']}\t{event_data['delay']}\t{event_data['random_time']}\n"
-                )
+            f.write(f"{str(event_data)}\n")
         f.write("\n")
 
     print(f"Preset '{name}' saved.")
@@ -779,60 +768,28 @@ def rearrange_events():
                 embedded_events = []
                 preset_name = listbox.get(selected_preset)
                 preset_path = os.path.join(presets_dir, f"{preset_name}.txt")
+
                 with open(preset_path, "r") as f:
                     lines = f.readlines()
-                    loading = False
                     for line in lines:
-                        if line.strip() == f"- {preset_name}":
-                            loading = True
+                        line = line.strip()
+                        if line.startswith("- "):
                             continue
-                        if loading and not line.strip():
-                            break
-                        if loading:
-                            if line.startswith("Delay:"):
-                                delay_between_rounds = int(line.split(":")[1].strip())
-                            else:
-                                event_data = line.split("\t")
-                                if len(event_data) >= 5:
-                                    (
-                                        event,
-                                        timing,
-                                        temp_click_type,
-                                        temp_press_count,
-                                        temp_random_timing,
-                                    ) = event_data[:5]
-                                    if event.startswith("("):
-                                        x, y = map(int, event.strip("()").split(","))
-                                        embedded_events.append(
-                                            {
-                                                "type": "click",
-                                                "position": (x, y),
-                                                "click_type": temp_click_type,
-                                                "press_count": int(temp_press_count),
-                                                "delay": int(timing),
-                                                "random_time": bool(temp_random_timing),
-                                            }
-                                        )
-                                    elif event.endswith("scroll"):
-                                        x, y = map(int, event.strip("()").split(","))
-                                        embedded_events.append(
-                                            {
-                                                "type": "scroll",
-                                                "position": (x, y),
-                                                "press_count": int(temp_press_count),
-                                                "delay": int(timing),
-                                                "random_time": bool(temp_random_timing),
-                                            }
-                                        )
-                                    else:
-                                        embedded_events.append(
-                                            {
-                                                "type": "text",
-                                                "content": event,
-                                                "delay": int(timing),
-                                                "random_time": bool(temp_random_timing),
-                                            }
-                                        )
+                        elif line.startswith("Delay:"):
+                            delay_between_rounds = int(line.split(":")[1].strip())
+                        else:
+                            try:
+                                event_data = eval(line)
+                                if "position" in event_data:
+                                    # Ensure click or scroll events have valid position data
+                                    event_data["position"] = tuple(
+                                        map(int, event_data["position"])
+                                    )
+                                embedded_events.append(event_data)
+                            except Exception as e:
+                                print(f"Error loading event: {e}")
+                                continue
+
                 update_event_overlays()
                 load_window.destroy()
                 rearrange_window.destroy()
