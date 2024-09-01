@@ -93,9 +93,8 @@ The **AutoClicker Program** is a versatile automation tool that allows users to 
 
 ## TODO List
 
-1. **Optimize event overlay for large screens and 2 screens**.
-2. **Enable conditional events (e.g., click only if a certain condition is met)**.
-3. **Provide an option for automatic screen recording during event sequences**.
-4. **Add hotkey customization for more flexible controls**.
-5. **Optimize presets to be easily expandable by moving embedded_events to the file and porting directly.**
-6. **Add Support for Linux and Max OS**
+1. **Enable conditional events (e.g., click only if a certain condition is met)**.
+2. **Provide an option for automatic screen recording during event sequences**.
+3. **Add hotkey customization for more flexible controls**.
+4. **Optimize presets to be easily expandable by moving embedded_events to the file and porting directly.**
+5. **Add Support for Linux and Max OS**

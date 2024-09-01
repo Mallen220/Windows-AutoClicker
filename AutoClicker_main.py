@@ -9,12 +9,14 @@ from tkinter import END, filedialog, Listbox, simpledialog, SINGLE, Toplevel
 import keyboard
 import pyautogui
 import pyperclip
+from screeninfo import get_monitors
 
 # pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "Presets;Presets" AutoClicker_main.py
 
 undo_stack = []
 redo_stack = []
 max_undo_redo = 25  # Limit to the number of undo/redo actions
+overlay_windows = []
 is_running = False
 always_on_top = False
 overlay_active = True
@@ -194,15 +196,94 @@ def modify_event(
 
 # Function to create an overlay window for event numbers
 def create_overlay():
-    overlay = tk.Toplevel(root)
-    overlay.iconbitmap(program_icon)
-    overlay.attributes("-alpha", 0.5)  # Semi-transparent window
-    overlay.attributes("-topmost", True)
-    overlay.geometry(f"{root.winfo_screenwidth()}x{root.winfo_screenheight()}+0+0")
-    overlay.overrideredirect(True)
-    overlay.attributes("-transparentcolor", overlay["bg"])
-    overlay.label_dict = {}
-    return overlay
+    global overlay_windows
+    overlay_windows = []
+
+    # Create an overlay window for each monitor
+    for monitor in get_monitors():
+        overlay = tk.Toplevel(root)
+        overlay.iconbitmap(program_icon)
+        overlay.attributes("-alpha", 0.5)
+        overlay.attributes("-topmost", True)
+
+        # Set the geometry according to the monitor size and position
+        overlay.geometry(f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}")
+        overlay.overrideredirect(True)
+        overlay.attributes("-transparentcolor", overlay["bg"])
+
+        overlay.label_dict = {}
+        overlay.monitor = monitor
+        overlay_windows.append(overlay)
+
+
+# Function to update overlays for all events
+def update_event_overlays():
+    global overlay_windows
+
+    for overlay in overlay_windows:
+        for label in overlay.label_dict.values():
+            label.destroy()
+
+    for event_num, event in enumerate(embedded_events, 1):
+        if event["type"] == "click" or event["type"] == "scroll":
+            x, y = event["position"]
+            create_event_overlay(event_num, x, y)
+        elif event["type"] == "text":
+            x, y = pyautogui.position()
+            create_event_overlay(event_num, x, y)
+
+
+# Function to determine which monitor the event was created on
+def get_monitor_for_position(x, y):
+    monitors = get_monitors()
+    for monitor in monitors:
+        if (
+            monitor.x <= x < monitor.x + monitor.width
+            and monitor.y <= y < monitor.y + monitor.height
+        ):
+            return monitor
+    return monitors[0]  # Fallback to the main monitor if not found
+
+
+# Function to create an event number overlay on the correct monitor
+def create_event_overlay(event_num, x, y):
+    if overlay_active:
+        event = embedded_events[event_num - 1]
+
+        if event["type"] == "text":
+            return
+
+        # Determine the label color based on the event type
+        if event["type"] == "click":
+            label_color = "red"
+        elif event["type"] == "scroll":
+            label_color = "green"
+        else:
+            try:
+                if embedded_events[event_num]["type"] == "text":
+                    label_color = "purple"
+            except Exception as e:
+                print(e)
+
+        # Find the monitor where this event should be displayed
+        monitor = get_monitor_for_position(x, y)
+
+        # Find the corresponding overlay window for this monitor
+        for overlay in overlay_windows:
+            if overlay.monitor == monitor:
+                # Adjust position relative to the monitor's top-left corner
+                adjusted_x = x - monitor.x
+                adjusted_y = y - monitor.y
+
+                # Create a label for the event number
+                label = tk.Label(
+                    overlay, text=str(event_num), fg=label_color, font=("Arial", 24)
+                )
+                label.place(x=adjusted_x, y=adjusted_y)
+
+                # Store the label in the overlay's label dictionary
+                overlay.label_dict[event_num] = label
+                break
 
 
 # Function to create an event
@@ -332,20 +413,6 @@ def add_to_redo_stack(action):
         redo_stack.pop(0)
 
 
-# Function to update overlays for all events
-def update_event_overlays():
-    for label in overlay.label_dict.values():
-        label.destroy()
-
-    for event_num, event in enumerate(embedded_events, 1):
-        if event["type"] == "click" or event["type"] == "scroll":
-            x, y = event["position"]
-            create_event_overlay(event_num, x, y)
-        elif event["type"] == "text":
-            x, y = pyautogui.position()
-            create_event_overlay(event_num, x, y)
-
-
 # Function to toggle "always on top"
 def toggle_always_on_top():
     global always_on_top
@@ -354,31 +421,6 @@ def toggle_always_on_top():
     always_on_top_button.config(
         text="Always on Top: ON" if always_on_top else "Always on Top: OFF"
     )
-
-
-# Function to create an event number overlay
-def create_event_overlay(event_num, x, y):
-    if overlay_active:
-        event = embedded_events[event_num - 1]
-        if event["type"] == "text":
-            return
-
-        try:
-            label_color = (
-                "purple" if embedded_events[event_num]["type"] == "text" else "red"
-            )
-            try:
-                label_color = "yellow" if event["type"] == "scroll" else "red"
-            except:
-                label_color = "red"
-        except:
-            label_color = "red"
-
-        label = tk.Label(
-            overlay, text=str(event_num), fg=label_color, font=("Arial", 24)
-        )
-        label.place(x=x, y=y)
-        overlay.label_dict[event_num] = label
 
 
 def open_text_input():
@@ -992,7 +1034,7 @@ root.bind("<Control-z>", lambda event: undo())
 root.bind("<Control-Z>", lambda event: undo())
 root.bind("<Control-Shift-Z>", lambda event: redo())
 
-overlay = create_overlay()
+create_overlay()
 
 create_button = tk.Button(root, text="Create Event", command=create_event)
 create_button.pack(pady=10)
