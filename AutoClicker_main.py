@@ -228,7 +228,7 @@ def update_event_overlays():
         if event["type"] == "click" or event["type"] == "scroll":
             x, y = event["position"]
             create_event_overlay(event_num, x, y)
-        elif event["type"] == "text":
+        elif event["type"] == "text" or event["type"] == "wait":
             x, y = pyautogui.position()
             create_event_overlay(event_num, x, y)
 
@@ -250,7 +250,7 @@ def create_event_overlay(event_num, x, y):
     if overlay_active:
         event = embedded_events[event_num - 1]
 
-        if event["type"] == "text":
+        if event["type"] == "text" or event["type"] == "wait":
             return
 
         # Determine the label color based on the event type
@@ -262,6 +262,11 @@ def create_event_overlay(event_num, x, y):
             try:
                 if embedded_events[event_num]["type"] == "text":
                     label_color = "purple"
+            except Exception as e:
+                print(e)
+            try:
+                if embedded_events[event_num]["type"] == "wait":
+                    label_color = "yellow"
             except Exception as e:
                 print(e)
 
@@ -295,36 +300,44 @@ def create_event():
             open_text_input()
         else:
             stop_text_input()
+    elif keyboard.is_pressed("w"):
+        new_event = embedded_events.append(
+            {
+                "type": "wait",
+                "delay": 100,
+                "random_time": False,
+            }
+        )
+        open_detailed_window(len(embedded_events) - 1)
+    elif keyboard.is_pressed("shift"):
+        print("Waiting for 'space' key press to create the scroll event...")
+        keyboard.wait("space")
+        x, y = pyautogui.position()
+
+        new_event = embedded_events.append(
+            {
+                "type": "scroll",
+                "position": (x, y),
+                "press_count": 300,
+                "delay": 100,
+                "random_time": False,
+            }
+        )
     else:
-        if keyboard.is_pressed("shift"):
-            print("Waiting for 'space' key press to create the scroll event...")
-            keyboard.wait("space")
-            x, y = pyautogui.position()
+        print("Waiting for 'space' key press to create the event...")
+        keyboard.wait("space")
+        x, y = pyautogui.position()
 
-            new_event = embedded_events.append(
-                {
-                    "type": "scroll",
-                    "position": (x, y),
-                    "press_count": 300,
-                    "delay": 100,
-                    "random_time": False,
-                }
-            )
-        else:
-            print("Waiting for 'space' key press to create the event...")
-            keyboard.wait("space")
-            x, y = pyautogui.position()
-
-            new_event = embedded_events.append(
-                {
-                    "type": "click",
-                    "position": (x, y),
-                    "click_type": "left",
-                    "press_count": 1,
-                    "delay": 100,
-                    "random_time": False,
-                }
-            )
+        new_event = embedded_events.append(
+            {
+                "type": "click",
+                "position": (x, y),
+                "click_type": "left",
+                "press_count": 1,
+                "delay": 100,
+                "random_time": False,
+            }
+        )
         print(f"Event created at position: ({x}, {y})")
 
         add_to_undo_stack(("create", new_event))
@@ -539,9 +552,159 @@ def save_preset(name=None):
     print(f"Preset '{name}' saved.")
 
 
+def open_detailed_window(idx, rearrange_window=None):
+    if (
+        embedded_events[idx]["type"] == "click"
+        or embedded_events[idx]["type"] == "scroll"
+        or embedded_events[idx]["type"] == "wait"
+    ):
+        if rearrange_window is None:
+            detailed_event_window = Toplevel(root)
+        else:
+            detailed_event_window = Toplevel(rearrange_window)
+        detailed_event_window.iconbitmap(program_icon)
+        detailed_event_window.title(f"Set Timeout for Event {idx + 1}")
+
+        timeout_label = tk.Label(detailed_event_window, text="Timeout? (ms)")
+        timeout_label.pack(pady=5)
+        timeout_entry = tk.Entry(detailed_event_window)
+        timeout_entry.pack(pady=5)
+        timeout_entry.insert(0, str(embedded_events[idx]["delay"]))
+
+        if not embedded_events[idx]["type"] == "wait":
+            press_count_label = tk.Label(
+                detailed_event_window, text="How many times to click:"
+            )
+            press_count_label.pack(pady=5)
+            press_count_entry = tk.Entry(detailed_event_window)
+            press_count_entry.pack(pady=5)
+            press_count_entry.insert(0, str(embedded_events[idx].get("press_count", 1)))
+
+            options = ["left", "middle", "right"]
+            clicked = tk.StringVar()
+            clicked.set(embedded_events[idx].get("click_type", "left"))
+
+            click_type_label = tk.Label(
+                detailed_event_window, text="Type of Mouse Click"
+            )
+            click_type_label.pack(pady=5)
+            click_type_entry = tk.OptionMenu(detailed_event_window, clicked, *options)
+            click_type_entry.pack(pady=5)
+
+        random_time_var = tk.BooleanVar()
+        random_time_check = tk.Checkbutton(
+            detailed_event_window, text="Random time", variable=random_time_var
+        )
+        random_time_check.pack(pady=5)
+
+        if not embedded_events[idx]["type"] == "wait":
+
+            def move_selected_event():
+                print("Waiting for 'space' key press to move the event...")
+                keyboard.wait("space")
+                x, y = pyautogui.position()
+
+                if embedded_events[idx]["type"] == "click":
+                    embedded_events[idx] = {
+                        "type": "click",
+                        "position": (x, y),
+                        "click_type": embedded_events[idx]["click_type"],
+                        "press_count": embedded_events[idx]["press_count"],
+                        "delay": embedded_events[idx]["delay"],
+                    }
+                elif embedded_events[idx]["type"] == "scroll":
+                    embedded_events[idx] = {
+                        "type": "scroll",
+                        "position": (x, y),
+                        "press_count": embedded_events[idx]["press_count"],
+                        "delay": embedded_events[idx]["delay"],
+                    }
+                update_event_overlays()
+
+            move_event = tk.Button(
+                detailed_event_window,
+                text="Move Event",
+                command=move_selected_event,
+            )
+            move_event.pack(pady=10)
+
+        def save_details():
+            new_timeout = timeout_entry.get()
+            if (
+                embedded_events[idx]["type"] == "scroll"
+                or embedded_events[idx]["type"] == "click"
+            ):
+                try:
+                    new_press_count = int(press_count_entry.get())
+                except ValueError:
+                    if embedded_events[idx]["type"] == "scroll":
+                        new_press_count = 300
+                    else:
+                        new_press_count = 1
+
+                try:
+                    embedded_events[idx]["delay"] = int(new_timeout)
+                    embedded_events[idx]["press_count"] = new_press_count
+                    embedded_events[idx]["click_type"] = clicked.get()
+                    embedded_events[idx]["random_time"] = random_time_var.get()
+                    print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
+
+                    update_listbox()
+                    detailed_event_window.destroy()
+                except ValueError:
+                    print("Please enter a valid number for the detailed window.")
+            elif embedded_events[idx]["type"] == "wait":
+                try:
+                    embedded_events[idx]["delay"] = int(new_timeout)
+                    embedded_events[idx]["random_time"] = random_time_var.get()
+                    print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
+
+                    update_listbox()
+                    detailed_event_window.destroy()
+                except ValueError:
+                    print("Please enter a valid number for the detailed window.")
+
+        save_button = tk.Button(
+            detailed_event_window, text="Save", command=save_details
+        )
+        save_button.pack(pady=10)
+    elif embedded_events[idx]["type"] == "text":
+        global is_text_mode
+        if not is_text_mode:
+            is_text_mode = True
+            open_text_input(idx)
+        else:
+            stop_text_input()
+
+        if rearrange_window is not None:
+            rearrange_window.destroy()
+
+
+def update_listbox():
+    global event_listbox
+    try:
+        event_listbox.delete(0, END)
+        for i, event_data in enumerate(embedded_events):
+            try:
+                if event_data["type"] == "click" or event_data["type"] == "scroll":
+                    event_listbox.insert(
+                        END, f"Event {i + 1}: {event_data['position']}"
+                    )
+                elif event_data["type"] == "text":
+                    event_listbox.insert(END, f"Event {i + 1}: {event_data['content']}")
+                elif event_data["type"] == "wait":
+                    event_listbox.insert(
+                        END, f"Event {i + 1}: Wait {event_data['delay'] / 1000} s"
+                    )
+            except Exception:
+                event_listbox.insert(END, f"Event {i + 1}: error loading event data")
+    except Exception:
+        print("Listbox does not exist. Failed to updated listbox. Exiting...")
+
+
 # Function to rearrange events and adjust timings
 def rearrange_events():
-    global embedded_events, delay_between_rounds
+    global embedded_events, delay_between_rounds, event_listbox
     rearrange_window = Toplevel(root)
     rearrange_window.iconbitmap(program_icon)
     rearrange_window.title("Rearrange Events")
@@ -554,6 +717,8 @@ def rearrange_events():
             event_listbox.insert(END, f"Event {i + 1}: {event_data['position']}")
         elif event_data["type"] == "text":
             event_listbox.insert(END, f"Event {i + 1}: {event_data['content']}")
+        elif event_data["type"] == "wait":
+            event_listbox.insert(END, f"Event {i + 1}: Wait {event_data['delay']} ms")
 
     delay_label = tk.Label(rearrange_window, text="Delay Between Rounds (ms):")
     delay_label.pack(pady=5)
@@ -600,120 +765,11 @@ def rearrange_events():
         event_listbox.select_set(selected_idx + 1)
         update_event_overlays()
 
-    def update_listbox():
-        event_listbox.delete(0, END)
-        for i, event_data in enumerate(embedded_events):
-            try:
-                event_listbox.insert(END, f"Event {i + 1}: {event_data['position']}")
-            except Exception:
-                event_listbox.insert(END, f"Event {i + 1}: {event_data['content']}")
-
     def randomize_all_times():
         for i in range(len(embedded_events)):
             embedded_events[i]["random_time"] = True
             print(f"Randomized timing for Event {i + 1}: True")
         update_event_overlays()
-
-    def open_detailed_window(idx):
-        if (
-            embedded_events[idx]["type"] == "click"
-            or embedded_events[idx]["type"] == "scroll"
-        ):
-            detailed_event_window = Toplevel(rearrange_window)
-            detailed_event_window.iconbitmap(program_icon)
-            detailed_event_window.title(f"Set Timeout for Event {idx + 1}")
-
-            timeout_label = tk.Label(detailed_event_window, text="Timeout? (ms)")
-            timeout_label.pack(pady=5)
-            timeout_entry = tk.Entry(detailed_event_window)
-            timeout_entry.pack(pady=5)
-            timeout_entry.insert(0, str(embedded_events[idx]["delay"]))
-
-            press_count_label = tk.Label(
-                detailed_event_window, text="How many times to click:"
-            )
-            press_count_label.pack(pady=5)
-            press_count_entry = tk.Entry(detailed_event_window)
-            press_count_entry.pack(pady=5)
-            press_count_entry.insert(0, str(embedded_events[idx].get("press_count", 1)))
-
-            options = ["left", "middle", "right"]
-            clicked = tk.StringVar()
-            clicked.set(embedded_events[idx].get("click_type", "left"))
-
-            click_type_label = tk.Label(
-                detailed_event_window, text="Type of Mouse Click"
-            )
-            click_type_label.pack(pady=5)
-            click_type_entry = tk.OptionMenu(detailed_event_window, clicked, *options)
-            click_type_entry.pack(pady=5)
-
-            random_time_var = tk.BooleanVar()
-            random_time_check = tk.Checkbutton(
-                detailed_event_window, text="Random time", variable=random_time_var
-            )
-            random_time_check.pack(pady=5)
-
-            def move_selected_event():
-                print("Waiting for 'space' key press to move the event...")
-                keyboard.wait("space")
-                x, y = pyautogui.position()
-
-                if embedded_events[idx]["type"] == "click":
-                    embedded_events[idx] = {
-                        "type": "click",
-                        "position": (x, y),
-                        "click_type": embedded_events[idx]["click_type"],
-                        "press_count": embedded_events[idx]["press_count"],
-                        "delay": embedded_events[idx]["delay"],
-                    }
-                elif embedded_events[idx]["type"] == "scroll":
-                    embedded_events[idx] = {
-                        "type": "scroll",
-                        "position": (x, y),
-                        "press_count": embedded_events[idx]["press_count"],
-                        "delay": embedded_events[idx]["delay"],
-                    }
-                update_event_overlays()
-
-            move_event = tk.Button(
-                detailed_event_window, text="Move Event", command=move_selected_event
-            )
-            move_event.pack(pady=10)
-
-            def save_details():
-                new_timeout = timeout_entry.get()
-                try:
-                    new_press_count = int(press_count_entry.get())
-                except ValueError:
-                    if embedded_events[idx]["type"] == "scroll":
-                        new_press_count = 300
-                    else:
-                        new_press_count = 1
-
-                try:
-                    embedded_events[idx]["delay"] = int(new_timeout)
-                    embedded_events[idx]["press_count"] = new_press_count
-                    embedded_events[idx]["click_type"] = clicked.get()
-                    embedded_events[idx]["random_time"] = random_time_var.get()
-                    print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
-                    update_listbox()
-                    detailed_event_window.destroy()
-                except ValueError:
-                    print("Please enter a valid number for the detailed window.")
-
-            save_button = tk.Button(
-                detailed_event_window, text="Save", command=save_details
-            )
-            save_button.pack(pady=10)
-        elif embedded_events[idx]["type"] == "text":
-            global is_text_mode
-            if not is_text_mode:
-                is_text_mode = True
-                open_text_input(idx)
-            else:
-                stop_text_input()
-            rearrange_window.destroy()
 
     def delete_all_events():
         global embedded_events
@@ -920,6 +976,10 @@ def start_program():
                             ),
                         )
                     print(f"Typed text: {event_data['content']}")
+                elif event_data["type"] == "wait":
+                    print(f"Waiting: {event_data['delay'] / 1000} s")
+                    time.sleep(event_data["delay"] / 1000)
+
             time.sleep(random_time_in_range(400, 3000) / 1000)
 
     thread = threading.Thread(target=run_events)
