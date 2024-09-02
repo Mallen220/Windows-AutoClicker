@@ -1,3 +1,4 @@
+import ast
 import os
 import random
 import sys
@@ -825,26 +826,30 @@ def rearrange_events():
                 preset_name = listbox.get(selected_preset)
                 preset_path = os.path.join(presets_dir, f"{preset_name}.txt")
 
-                with open(preset_path, "r") as f:
-                    lines = f.readlines()
-                    for line in lines:
-                        line = line.strip()
-                        if line.startswith("- "):
-                            continue
-                        elif line.startswith("Delay:"):
-                            delay_between_rounds = int(line.split(":")[1].strip())
-                        else:
-                            try:
-                                event_data = eval(line)
-                                if "position" in event_data:
-                                    # Ensure click or scroll events have valid position data
-                                    event_data["position"] = tuple(
-                                        map(int, event_data["position"])
-                                    )
-                                embedded_events.append(event_data)
-                            except Exception as e:
-                                print(f"Error loading event: {e}")
+                try:
+                    with open(preset_path, "r") as f:
+                        lines = f.readlines()
+                        for line in lines:
+                            line = line.strip()
+                            if line.startswith("- "):
                                 continue
+                            elif line.startswith("Delay:"):
+                                delay_between_rounds = int(line.split(":")[1].strip())
+                            else:
+                                try:
+                                    event_data = ast.literal_eval(line)
+                                    if "position" in event_data:
+                                        event_data["position"] = tuple(
+                                            map(int, event_data["position"])
+                                        )
+                                    embedded_events.append(event_data)
+                                except (ValueError, SyntaxError) as e:
+                                    print(f"Error loading event: {e}")
+                                    continue
+                except FileNotFoundError:
+                    print(f"Preset file '{preset_name}' not found.")
+                except Exception as e:
+                    print(f"An unexpected error occurred: {e}")
 
                 update_event_overlays()
                 load_window.destroy()
