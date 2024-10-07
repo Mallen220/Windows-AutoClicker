@@ -1,4 +1,4 @@
 - last_save
-Delay: 5000
-(429, 216)	100
+Delay: 500
+{'type': 'click', 'position': (1845, 454), 'click_type': 'left', 'press_count': 1, 'delay': 100, 'random_time': False}
 

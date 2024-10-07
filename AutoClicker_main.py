@@ -7,12 +7,14 @@ import time
 import tkinter as tk
 from tkinter import END, filedialog, Listbox, simpledialog, SINGLE, Toplevel
 
-import keyboard
+from pynput import keyboard
 import pyautogui
 import pyperclip
 from screeninfo import get_monitors
 
-# pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "Presets;Presets" AutoClicker_main.py
+#Windows: pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "Presets;Presets" AutoClicker_main.py
+#Ubuntu: pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico:." --add-data "Presets:Presets" AutoClicker_main.py
+# sudo apt-get install xclip for Ubuntu
 
 undo_stack = []
 redo_stack = []
@@ -28,11 +30,21 @@ max_random_time = 4000
 
 embedded_events = []
 
+def is_windows_os():
+    if os.name == "nt":
+        return True
+
+    return False
+
 # Determine the path to the icon and presets directory
-if getattr(sys, "frozen", False):
-    program_icon = os.path.join(sys._MEIPASS, "AutoClicker.ico")
+if is_windows_os():
+    if getattr(sys, "frozen", False):
+        program_icon = os.path.join(sys._MEIPASS, "AutoClicker.ico")
+    else:
+        program_icon = "AutoClicker.ico"
 else:
-    program_icon = "AutoClicker.ico"
+    program_icon = "AutoClicker.ico"  # Change the extension if needed
+
 
 presets_dir = "Presets"
 if not os.path.exists(presets_dir):
@@ -165,6 +177,53 @@ special_keys = {
     "optionright": "optionright",
 }
 
+pressed_keys = set()
+
+def get_os():
+    if os.name == "nt":
+        return "Windows"
+    elif os.name == "posix":
+        return "Linux"
+
+
+
+def on_press(key):
+    """Callback for when a key is pressed"""
+    try:
+        # Add the pressed key to the set
+        pressed_keys.add(key.char if hasattr(key, 'char') else key)
+    except AttributeError:
+        pressed_keys.add(key)
+
+def on_release(key):
+    """Callback for when a key is released"""
+    try:
+        # Remove the released key from the set
+        pressed_keys.remove(key.char if hasattr(key, 'char') else key)
+    except KeyError:
+        pass
+
+
+def is_pressed(key):
+    """Check if a specific key is currently being pressed and return a boolean."""
+    # Handle single character keys (e.g., 'a', 'b', '1', etc.)
+    if len(key) == 1:
+        key_obj = keyboard.KeyCode(char=key)
+    else:
+        try:
+            # Handle special keys like 'esc', 'shift', etc.
+            key_obj = getattr(keyboard.Key, key.lower())
+        except AttributeError:
+            raise ValueError(f"Invalid key: {key}")
+
+    # Check if the key is in the pressed_keys set
+    return key_obj in pressed_keys
+
+
+def wait_for_key(key):
+    """Wait until a specific key is pressed"""
+    while not is_pressed(key):
+        pass
 
 # Function to modify an event
 def modify_event(
@@ -203,15 +262,15 @@ def create_overlay():
     # Create an overlay window for each monitor
     for monitor in get_monitors():
         overlay = tk.Toplevel(root)
-        overlay.iconbitmap(program_icon)
-        overlay.attributes("-alpha", 0.5)
-        overlay.attributes("-topmost", True)
+        icon_per_os(overlay)
 
         # Set the geometry according to the monitor size and position
         overlay.geometry(f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}")
-        overlay.overrideredirect(True)
-        overlay.attributes("-transparentcolor", overlay["bg"])
+        overlay.overrideredirect(True)  # Remove window decorations (top bar, borders)
+        if is_windows_os():
+            overlay.attributes("-transparentcolor", overlay["bg"])
 
+        # Allow adding visible text or widgets
         overlay.label_dict = {}
         overlay.monitor = monitor
         overlay_windows.append(overlay)
@@ -295,13 +354,13 @@ def create_event_overlay(event_num, x, y):
 # Function to create an event
 def create_event():
     global is_text_mode
-    if keyboard.is_pressed("ctrl"):
+    if is_pressed("ctrl_l") or is_pressed("ctrl_r") or is_pressed("ctrl"):
         if not is_text_mode:
             is_text_mode = True
             open_text_input()
         else:
             stop_text_input()
-    elif keyboard.is_pressed("w"):
+    elif is_pressed("w"):
         new_event = embedded_events.append(
             {
                 "type": "wait",
@@ -310,9 +369,9 @@ def create_event():
             }
         )
         open_detailed_window(len(embedded_events) - 1)
-    elif keyboard.is_pressed("shift"):
+    elif is_pressed("shift"):
         print("Waiting for 'space' key press to create the scroll event...")
-        keyboard.wait("space")
+        wait_for_key("space")
         x, y = pyautogui.position()
 
         new_event = embedded_events.append(
@@ -326,7 +385,7 @@ def create_event():
         )
     else:
         print("Waiting for 'space' key press to create the event...")
-        keyboard.wait("space")
+        wait_for_key("space")
         x, y = pyautogui.position()
 
         new_event = embedded_events.append(
@@ -443,7 +502,7 @@ def toggle_always_on_top():
 def open_text_input(idx=None):
     global input_window, text_box, instant_type_var
     input_window = Toplevel(root)
-    input_window.iconbitmap(program_icon)
+    icon_per_os(input_window)
     input_window.title("Enter Text")
     if idx is None:
         input_window.geometry("500x350")
@@ -563,7 +622,7 @@ def open_detailed_window(idx, rearrange_window=None):
             detailed_event_window = Toplevel(root)
         else:
             detailed_event_window = Toplevel(rearrange_window)
-        detailed_event_window.iconbitmap(program_icon)
+        icon_per_os(detailed_event_window)
         detailed_event_window.title(f"Set Timeout for Event {idx + 1}")
 
         timeout_label = tk.Label(detailed_event_window, text="Timeout? (ms)")
@@ -598,11 +657,22 @@ def open_detailed_window(idx, rearrange_window=None):
         )
         random_time_check.pack(pady=5)
 
+        def delete_selected_event():
+            embedded_events.pop(idx)
+            update_event_overlays()
+
+        delete_event = tk.Button(
+            detailed_event_window,
+            text="Delete Event",
+            command=delete_selected_event,
+        )
+        delete_event.pack(pady=10)
+
         if not embedded_events[idx]["type"] == "wait":
 
             def move_selected_event():
                 print("Waiting for 'space' key press to move the event...")
-                keyboard.wait("space")
+                wait_for_key("space")
                 x, y = pyautogui.position()
 
                 if embedded_events[idx]["type"] == "click":
@@ -631,39 +701,46 @@ def open_detailed_window(idx, rearrange_window=None):
 
         def save_details():
             new_timeout = timeout_entry.get()
-            if (
-                embedded_events[idx]["type"] == "scroll"
-                or embedded_events[idx]["type"] == "click"
-            ):
-                try:
-                    new_press_count = int(press_count_entry.get())
-                except ValueError:
-                    if embedded_events[idx]["type"] == "scroll":
-                        new_press_count = 300
-                    else:
-                        new_press_count = 1
+            try:
+                if (
+                        embedded_events[idx]["type"] == "scroll"
+                        or embedded_events[idx]["type"] == "click"
+                ):
+                    try:
+                        new_press_count = int(press_count_entry.get())
+                    except ValueError:
+                        if embedded_events[idx]["type"] == "scroll":
+                            new_press_count = 300
+                        else:
+                            new_press_count = 1
 
-                try:
-                    embedded_events[idx]["delay"] = int(new_timeout)
-                    embedded_events[idx]["press_count"] = new_press_count
-                    embedded_events[idx]["click_type"] = clicked.get()
-                    embedded_events[idx]["random_time"] = random_time_var.get()
-                    print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
+                    try:
+                        embedded_events[idx]["delay"] = int(new_timeout)
+                        embedded_events[idx]["press_count"] = new_press_count
+                        embedded_events[idx]["click_type"] = clicked.get()
+                        embedded_events[idx]["random_time"] = random_time_var.get()
+                        print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
 
-                    update_listbox()
-                    detailed_event_window.destroy()
-                except ValueError:
-                    print("Please enter a valid number for the detailed window.")
-            elif embedded_events[idx]["type"] == "wait":
-                try:
-                    embedded_events[idx]["delay"] = int(new_timeout)
-                    embedded_events[idx]["random_time"] = random_time_var.get()
-                    print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
+                        update_listbox()
+                        detailed_event_window.destroy()
+                    except ValueError:
+                        print("Please enter a valid number for the detailed window.")
+                elif embedded_events[idx]["type"] == "wait":
+                    try:
+                        embedded_events[idx]["delay"] = int(new_timeout)
+                        embedded_events[idx]["random_time"] = random_time_var.get()
+                        print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
 
-                    update_listbox()
-                    detailed_event_window.destroy()
-                except ValueError:
-                    print("Please enter a valid number for the detailed window.")
+                        update_listbox()
+                        detailed_event_window.destroy()
+                    except ValueError:
+                        print("Please enter a valid number for the detailed window.")
+            except Exception as e:
+                print("Wow! An error occurred. Are there no events? embedded_events[idx] is likely out of range. ")
+                update_listbox()
+                detailed_event_window.destroy()
+
+
 
         save_button = tk.Button(
             detailed_event_window, text="Save", command=save_details
@@ -707,7 +784,7 @@ def update_listbox():
 def rearrange_events():
     global embedded_events, delay_between_rounds, event_listbox
     rearrange_window = Toplevel(root)
-    rearrange_window.iconbitmap(program_icon)
+    icon_per_os(rearrange_window)
     rearrange_window.title("Rearrange Events")
     rearrange_window.geometry("500x700")
     event_listbox = Listbox(rearrange_window, selectmode=SINGLE, width=40, height=10)
@@ -795,7 +872,7 @@ def rearrange_events():
     # Function to load a selected preset
     def load_preset():
         load_window = Toplevel(root)
-        load_window.iconbitmap(program_icon)
+        icon_per_os(load_window)
         load_window.title("Load Preset")
         load_window.geometry("300x500")
         listbox = Listbox(load_window, width=40, height=15)
@@ -833,15 +910,17 @@ def rearrange_events():
                             line = line.strip()
                             if line.startswith("- "):
                                 continue
-                            elif line.startswith("Delay:"):
+                            elif line.startswith("Delay: "):
                                 delay_between_rounds = int(line.split(":")[1].strip())
                             else:
                                 try:
                                     event_data = ast.literal_eval(line)
                                     if "position" in event_data:
+
                                         event_data["position"] = tuple(
                                             map(int, event_data["position"])
                                         )
+
                                     embedded_events.append(event_data)
                                 except (ValueError, SyntaxError) as e:
                                     print(f"Error loading event: {e}")
@@ -966,6 +1045,8 @@ def start_program():
                         pyautogui.hotkey("ctrl", "c")
                     elif event_data["content"] == "Paste":
                         pyautogui.hotkey("ctrl", "v")
+                    elif event_data["content"] == "Control Right Arrow":
+                        pyautogui.hotkey("ctrl", "right")
                     elif event_data["delay"] == 0:
                         pyperclip.copy(event_data["content"])
                         pyautogui.hotkey("ctrl", "v")
@@ -1031,7 +1112,7 @@ def stop_program():
 def monitor_space_key():
     def stop_on_space_key():
         while is_running:
-            if keyboard.is_pressed("space"):
+            if is_pressed("space"):
                 stop_program()
 
     thread = threading.Thread(target=stop_on_space_key)
@@ -1075,10 +1156,17 @@ def close_and_save():
     print("Closing program.")
     root.quit()
 
+def icon_per_os(window):
+    if is_windows_os():
+        window.iconbitmap(program_icon)
+    else:
+        print("No Linux Icon!")
+        # window.iconphoto(False, tk.PhotoImage(file=program_icon))
+
 
 root = tk.Tk()
 root.title("Event Controller")
-root.iconbitmap(program_icon)
+icon_per_os(root)
 root.attributes("-alpha", 0.85)
 root.geometry("225x350")
 
@@ -1102,7 +1190,8 @@ root.bind("<Control-z>", lambda event: undo())
 root.bind("<Control-Z>", lambda event: undo())
 root.bind("<Control-Shift-Z>", lambda event: redo())
 
-create_overlay()
+if os.name == "nt": # TODO: Make it work on Ubuntu and MacOS.
+    create_overlay()
 
 create_button = tk.Button(root, text="Create Event", command=create_event)
 create_button.pack(pady=10)
@@ -1123,5 +1212,8 @@ always_on_top_button.pack(pady=10)
 
 close_button = tk.Button(root, text="Close & Save", command=close_and_save)
 close_button.pack(pady=10)
+
+listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+listener.start()
 
 root.mainloop()
