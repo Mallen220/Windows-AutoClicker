@@ -7,6 +7,10 @@ import time
 import tkinter as tk
 from tkinter import END, filedialog, Listbox, simpledialog, SINGLE, Toplevel
 
+from pynput.keyboard import Key
+
+from KeyCapture import start_key_capture
+
 from pynput import keyboard
 import pyautogui
 import pyperclip
@@ -501,38 +505,50 @@ def toggle_always_on_top():
 
 def open_text_input(idx=None):
     global input_window, text_box, instant_type_var
-    input_window = Toplevel(root)
+    input_window = tk.Toplevel(root)
     icon_per_os(input_window)
     input_window.title("Enter Text")
     if idx is None:
-        input_window.geometry("500x350")
-    else:
         input_window.geometry("500x400")
+    else:
+        input_window.geometry("500x450")
+
     label = tk.Label(
         input_window, text="Enter text to simulate (Press 'Enter' for new line):"
     )
     label.pack(pady=5)
+
     text_box = tk.Text(input_window, width=40, height=5)
     text_box.pack(pady=5)
     text_box.focus()
+
     instant_type_var = tk.BooleanVar()
     instant_type_check = tk.Checkbutton(
         input_window, text="Instant Type", variable=instant_type_var
     )
-
     instant_type_check.pack(pady=5)
+
     copy_button = tk.Button(
         input_window,
         text="Set to copy selection",
-        command=lambda: set_text_input("Copy"),
+        command=lambda: set_text_input("HOTKEYS: c + ctrl"),
     )
     copy_button.pack(pady=5)
+
     paste_button = tk.Button(
         input_window,
         text="Set to paste at cursor",
-        command=lambda: set_text_input("Paste"),
+        command=lambda: set_text_input("HOTKEYS: v + ctrl"),
     )
     paste_button.pack(pady=5)
+
+    custom_hotkey_button = tk.Button(
+        input_window,
+        text="Custom Hotkeys",
+        command=capture_hotkeys
+    )
+    custom_hotkey_button.pack(pady=5)
+
     if idx is None:
         save_button = tk.Button(input_window, text="Save Text", command=save_text)
     else:
@@ -548,6 +564,17 @@ def open_text_input(idx=None):
             command=lambda: save_text(idx, random_time_var.get()),
         )
     save_button.pack(pady=5)
+
+
+def capture_hotkeys():
+    """Function to start key capture and set the captured hotkeys."""
+    pressed_keys = start_key_capture()  # Capture keys using KeyCapture
+    if pressed_keys:
+        hotkeys_str = "HOTKEYS: " + " + ".join(
+            str(key).replace("Key.", "") if isinstance(key, Key) else str(key)
+            for key in pressed_keys
+        )
+        set_text_input(hotkeys_str)
 
 
 def set_text_input(text):
@@ -1037,14 +1064,35 @@ def start_program():
                     if event_data["random_time"]:
                         time.sleep(
                             random_time_in_range(min_random_time, max_random_time)
-                        )
+                         )
                     else:
                         time.sleep(event_data["delay"] / 1000)
                 elif event_data["type"] == "text":
-                    if event_data["content"] == "Copy":
-                        pyautogui.hotkey("ctrl", "c")
-                    elif event_data["content"] == "Paste":
-                        pyautogui.hotkey("ctrl", "v")
+                    if event_data["content"].startswith("HOTKEYS: "):
+                        hotkey_string = event_data["content"][len("HOTKEYS: "):].strip()
+                        hotkeys = hotkey_string.split(" + ")
+
+                        hotkeys = [key.strip().lower() for key in hotkeys]
+
+                        modifiers = []
+
+                        for key in hotkeys:
+                            if key in ['ctrl', 'alt', 'shift', 'fn', 'super']:
+                                modifiers.append(key)
+                            else:
+                                main_key = key
+
+                        if 'main_key' not in locals():
+                            print("No valid hotkey found.")
+                            return
+
+                        try:
+                            if modifiers:
+                                pyautogui.hotkey(*modifiers, main_key)
+                            else:
+                                pyautogui.press(main_key)
+                        except Exception as e:
+                            print(f"Error executing hotkey: {e}")
                     elif event_data["content"] == "Control Right Arrow":
                         pyautogui.hotkey("ctrl", "right")
                     elif event_data["delay"] == 0:
