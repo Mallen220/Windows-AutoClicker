@@ -95,7 +95,6 @@ def open_detailed_window(idx=None):
                         Constants.embedded_events[idx]["random_time"] = random_time_var.get()
                         print(f"Updated details of Event {idx + 1}: {Constants.embedded_events[idx]}")
 
-                        Constants.update_listbox()
                         detailed_event_window.destroy()
                     except ValueError:
                         print("Please enter a valid number for the detailed window.")
@@ -104,15 +103,12 @@ def open_detailed_window(idx=None):
                         Constants.embedded_events[idx]["delay"] = int(new_timeout)
                         Constants.embedded_events[idx]["random_time"] = random_time_var.get()
                         print(f"Updated details of Event {idx + 1}: {Constants.embedded_events[idx]}")
-
-                        Constants.update_listbox()
                         detailed_event_window.destroy()
                     except ValueError:
                         print("Please enter a valid number for the detailed window.")
             except Exception as e:
                 print(
                     "Wow! An error occurred. Are there no events? Constants.embedded_events[idx] is likely out of range. ")
-                Constants.update_listbox()
                 detailed_event_window.destroy()
 
         save_button = tk.Button(

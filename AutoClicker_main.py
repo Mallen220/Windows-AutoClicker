@@ -14,14 +14,14 @@ import UndoRedo
 
 ScreenOverlay.create_overlay(Root.window)
 
-ButtonVariables.create_button.pack(pady=10)
-ButtonVariables.delete_button.pack(pady=10)
+Root.create_button.pack(pady=10)
+Root.delete_button.pack(pady=10)
 
-ButtonVariables.rearrange_button.pack(pady=10)
+Root.rearrange_button.pack(pady=10)
 
 Root.start_button.pack(pady=10)
-ButtonVariables.always_on_top_button.pack(pady=10)
+Root.always_on_top_button.pack(pady=10)
 
-ButtonVariables.close_button.pack(pady=10)
+Root.close_button.pack(pady=10)
 
 Root.window.mainloop()

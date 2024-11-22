@@ -81,9 +81,10 @@ def start_program():
 
 # Function to stop the program
 def stop_program():
+    import Root
     global is_running
     is_running = False
-    Constants.start_button.config(text="Start Program", command=start_program)
+    Root.start_button.config(text="Start Program", command=start_program)
     print("Program stopped!")
 
 

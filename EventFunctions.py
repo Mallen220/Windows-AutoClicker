@@ -36,6 +36,7 @@ def modify_event(
 
 # Function to create an event
 def create_event():
+    global new_event
     import Text
     import DetailedWindow
     if KeyTracker.is_pressed("ctrl_l") or KeyTracker.is_pressed("ctrl_r") or KeyTracker.is_pressed("ctrl"):

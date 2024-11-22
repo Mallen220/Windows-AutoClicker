@@ -1,8 +1,11 @@
 from tkinter import END, filedialog, Listbox, simpledialog, SINGLE, Toplevel
 import Constants
+import hashlib
 
 # Listbox
 event_listbox = Listbox(None, selectmode=SINGLE, width=40, height=10)
+last_event_state = None
+
 
 def initialize_listbox(parent_window):
     global event_listbox
@@ -32,3 +35,11 @@ def update_listbox():
                 event_listbox.insert(END, f"Event {i + 1}: error loading event data")
     except Exception:
         print("Listbox does not exist. Failed to update listbox. Exiting...")
+
+
+def should_update_listbox():
+    global last_event_state
+    current_state = hashlib.md5(str(Constants.embedded_events).encode()).hexdigest()
+    if last_event_state != current_state:
+        last_event_state = current_state
+        update_listbox()

@@ -155,7 +155,10 @@ def is_windows_os():
 def icon_per_os(window):
     if is_windows_os():
         if getattr(sys, "frozen", False):
-            window.iconbitmap(os.path.join(sys._MEIPASS, "AutoClicker.ico"))
+            program_icon = os.path.join(sys._MEIPASS, "AutoClicker.ico")
+        else:
+            program_icon = "AutoClicker.ico"
+        window.iconbitmap(program_icon)
     else:
         print("No Linux Icon!")
 

@@ -67,11 +67,14 @@ def upload_preset():
             print(f"Preset from {file_path} uploaded successfully.")
         else:
             print(f"Preset already exists: {file_name}")
-
+        check_variable_state()
         load_window.destroy()
 
 def load_selected(selected_preset=None):
+    global listbox
     if selected_preset is None:
+        selected_preset = listbox.get(listbox.curselection())
+    else:
         selected_preset = listbox.get(selected_preset)
     if selected_preset:
         Constants.embedded_events = []
@@ -86,7 +89,7 @@ def load_selected(selected_preset=None):
                     if line.startswith("- "):
                         continue
                     elif line.startswith("Delay: "):
-                        delay_between_rounds = int(line.split(":")[1].strip())
+                        Constants.delay_between_rounds = int(line.split(":")[1].strip())
                     else:
                         try:
                             event_data = ast.literal_eval(line)
@@ -113,6 +116,8 @@ def load_selected(selected_preset=None):
 
 def delete_selected(selected_preset=None):
     if selected_preset is None:
+        selected_preset = listbox.get(listbox.curselection())
+    else:
         selected_preset = listbox.get(selected_preset)
     if selected_preset:
         preset_name = selected_preset
@@ -123,6 +128,25 @@ def delete_selected(selected_preset=None):
             listbox.delete(selected_preset)
             Constants.embedded_events = []
             ScreenOverlay.update_event_overlays()
+
+def check_variable_state():
+    global load_window
+    if 'load_window' not in globals() and 'load_window' not in locals():
+        load_window = Toplevel(Root.window)
+
+def create_presets_window():
+    global load_window, listbox
+    load_window = Toplevel(Root.window)
+    Constants.icon_per_os(load_window)
+    load_window.title("Load Preset")
+    load_window.geometry("300x500")
+    listbox = Listbox(load_window, width=40, height=15)
+    listbox.pack(pady=10)
+
+    # List all .txt files in the presets directory
+    presets = [f for f in os.listdir(Constants.presets_dir) if f.endswith(".txt")]
+    for preset in presets:
+        listbox.insert(END, preset[:-4])
 
     load_button = tk.Button(
         load_window, text="Load Selected Preset", command=load_selected
@@ -139,15 +163,8 @@ def delete_selected(selected_preset=None):
     )
     delete_button.pack(pady=10)
 
-if __name__ == "__main__":
-    load_window = Toplevel(Root.window)
-    Constants.icon_per_os(load_window)
-    load_window.title("Load Preset")
-    load_window.geometry("300x500")
-    listbox = Listbox(load_window, width=40, height=15)
-    listbox.pack(pady=10)
-
-    # List all .txt files in the presets directory
-    presets = [f for f in os.listdir(Constants.presets_dir) if f.endswith(".txt")]
-    for preset in presets:
-        listbox.insert(END, preset[:-4])
+def create_buttons(window_name):
+    save_preset_button = tk.Button(window_name, text="Save Preset", command=save_preset)
+    load_preset_button = tk.Button(window_name, text="Load Preset", command=create_presets_window)
+    save_preset_button.pack(pady=5)
+    load_preset_button.pack(pady=5)
