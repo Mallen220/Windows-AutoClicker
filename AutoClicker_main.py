@@ -12,8 +12,8 @@ import pyautogui
 import pyperclip
 from screeninfo import get_monitors
 
-#Windows: pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "Presets;Presets" AutoClicker_main.py
-#Ubuntu: pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico:." --add-data "Presets:Presets" AutoClicker_main.py
+# Windows: pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico;." --add-data "Presets;Presets" AutoClicker_main.py
+# Ubuntu: pyinstaller --onefile --windowed --icon=AutoClicker.ico --add-data "AutoClicker.ico:." --add-data "Presets:Presets" AutoClicker_main.py
 # sudo apt-get install xclip for Ubuntu
 
 undo_stack = []
@@ -30,11 +30,13 @@ max_random_time = 4000
 
 embedded_events = []
 
+
 def is_windows_os():
     if os.name == "nt":
         return True
 
     return False
+
 
 # Determine the path to the icon and presets directory
 if is_windows_os():
@@ -179,6 +181,7 @@ special_keys = {
 
 pressed_keys = set()
 
+
 def get_os():
     if os.name == "nt":
         return "Windows"
@@ -186,20 +189,20 @@ def get_os():
         return "Linux"
 
 
-
 def on_press(key):
     """Callback for when a key is pressed"""
     try:
         # Add the pressed key to the set
-        pressed_keys.add(key.char if hasattr(key, 'char') else key)
+        pressed_keys.add(key.char if hasattr(key, "char") else key)
     except AttributeError:
         pressed_keys.add(key)
+
 
 def on_release(key):
     """Callback for when a key is released"""
     try:
         # Remove the released key from the set
-        pressed_keys.remove(key.char if hasattr(key, 'char') else key)
+        pressed_keys.remove(key.char if hasattr(key, "char") else key)
     except KeyError:
         pass
 
@@ -224,6 +227,7 @@ def wait_for_key(key):
     """Wait until a specific key is pressed"""
     while not is_pressed(key):
         pass
+
 
 # Function to modify an event
 def modify_event(
@@ -703,8 +707,8 @@ def open_detailed_window(idx, rearrange_window=None):
             new_timeout = timeout_entry.get()
             try:
                 if (
-                        embedded_events[idx]["type"] == "scroll"
-                        or embedded_events[idx]["type"] == "click"
+                    embedded_events[idx]["type"] == "scroll"
+                    or embedded_events[idx]["type"] == "click"
                 ):
                     try:
                         new_press_count = int(press_count_entry.get())
@@ -719,7 +723,9 @@ def open_detailed_window(idx, rearrange_window=None):
                         embedded_events[idx]["press_count"] = new_press_count
                         embedded_events[idx]["click_type"] = clicked.get()
                         embedded_events[idx]["random_time"] = random_time_var.get()
-                        print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
+                        print(
+                            f"Updated details of Event {idx + 1}: {embedded_events[idx]}"
+                        )
 
                         update_listbox()
                         detailed_event_window.destroy()
@@ -729,18 +735,20 @@ def open_detailed_window(idx, rearrange_window=None):
                     try:
                         embedded_events[idx]["delay"] = int(new_timeout)
                         embedded_events[idx]["random_time"] = random_time_var.get()
-                        print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
+                        print(
+                            f"Updated details of Event {idx + 1}: {embedded_events[idx]}"
+                        )
 
                         update_listbox()
                         detailed_event_window.destroy()
                     except ValueError:
                         print("Please enter a valid number for the detailed window.")
             except Exception as e:
-                print("Wow! An error occurred. Are there no events? embedded_events[idx] is likely out of range. ")
+                print(
+                    "Wow! An error occurred. Are there no events? embedded_events[idx] is likely out of range. "
+                )
                 update_listbox()
                 detailed_event_window.destroy()
-
-
 
         save_button = tk.Button(
             detailed_event_window, text="Save", command=save_details
@@ -1158,6 +1166,7 @@ def close_and_save():
     print("Closing program.")
     root.quit()
 
+
 def icon_per_os(window):
     if is_windows_os():
         window.iconbitmap(program_icon)
@@ -1192,7 +1201,7 @@ root.bind("<Control-z>", lambda event: undo())
 root.bind("<Control-Z>", lambda event: undo())
 root.bind("<Control-Shift-Z>", lambda event: redo())
 
-if os.name == "nt": # TODO: Make it work on Ubuntu and MacOS.
+if os.name == "nt":  # TODO: Make it work on Ubuntu and MacOS.
     create_overlay()
 
 create_button = tk.Button(root, text="Create Event", command=create_event)
