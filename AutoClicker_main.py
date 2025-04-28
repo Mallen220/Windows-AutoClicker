@@ -1045,6 +1045,8 @@ def start_program():
                         pyautogui.hotkey("ctrl", "c")
                     elif event_data["content"] == "Paste":
                         pyautogui.hotkey("ctrl", "v")
+                    elif event_data["content"] == "Print":
+                        pyautogui.hotkey("command", "p")
                     elif event_data["content"] == "Control Right Arrow":
                         pyautogui.hotkey("ctrl", "right")
                     elif event_data["delay"] == 0:
