@@ -1044,9 +1044,9 @@ def close_and_save():
 
 def random_time_in_range(min_time=None, max_time=None):
     if min_time is None:
-        min_time = 50
+        min_time = min_random_time
     if max_time is None:
-        max_time = 4000
+        max_time = max_random_time
 
     return random.randint(min_time, max_time) / 1000
 
