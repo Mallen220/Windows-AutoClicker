@@ -270,18 +270,22 @@ def save_details(
     update_listbox()
 
 
-def move_selected_event(idx=None):
+def move_selected_event(window=None, idx=None):
     print("Waiting for 'space' key press to move the event...")
     wait_for_key("space")
+
     x, y = pyautogui.position()
     if idx is None:
-        idx = len(embedded_events)  ##TODO: Test if this should be +1 or not
+        idx = len(embedded_events) - 1
     if (
         embedded_events[idx]["type"] == "click"
         or embedded_events[idx]["type"] == "scroll"
     ):
         embedded_events[idx]["position"] = (x, y)
     update_event_overlays()
+
+    if window is not None:
+        window.destroy()
 
 
 # Function to create an event
@@ -363,27 +367,25 @@ def save_delay(new_delay):
         print("Please enter a valid number for the delay.")
 
 
-def modify_event_order(
-    original_event_idx, shift_amount
-):  # -1 is down one, +1 is up one.
-    # selected_idx = event_listbox.curselection()
-    if (
-        not original_event_idx
-        or (original_event_idx[0] == 0 and shift_amount < 0)
-        or (
-            original_event_idx[0] == len(embedded_events) + shift_amount
-            and shift_amount > 0
-        )
-    ):
+def modify_event_order(selected_tuple, shift: int) -> None:
+    if not selected_tuple or shift == 0:
         return
-    selected_idx = original_event_idx[0]
-    embedded_events[selected_idx], embedded_events[selected_idx + shift_amount] = (
-        embedded_events[selected_idx + shift_amount],
-        embedded_events[selected_idx],
-    )
+
+    src_idx = selected_tuple[0]
+    max_idx = len(embedded_events) - 1
+
+    # clamp destination so it stays within [0, max_idx]
+    dst_idx = max(0, min(src_idx + shift, max_idx))
+    if dst_idx == src_idx:
+        return  # nothing to do
+
+    item = embedded_events.pop(src_idx)
+    embedded_events.insert(dst_idx, item)
+
     update_listbox()
-    event_listbox.select_set(selected_idx - 1)
+    event_listbox.select_set(dst_idx)
     update_event_overlays()
+
 
 
 #####################################################
@@ -719,7 +721,7 @@ def open_detailed_window(idx, rearrange_window=None):
             move_event = tk.Button(
                 detailed_event_window,
                 text="Move Event",
-                command=move_selected_event,
+                command=lambda: (move_selected_event(detailed_event_window), update_listbox()),
             )
             move_event.pack(pady=10)
 
@@ -732,7 +734,7 @@ def open_detailed_window(idx, rearrange_window=None):
                     timeout_entry.get(),
                     random_time_var.get(),
                     int(press_count_entry.get()),
-                    click_type_entry.getvar(),
+                    clicked.get(),
                 ),
                 detailed_event_window.destroy(),
             ),
@@ -761,6 +763,7 @@ def toggle_always_on_top():
 
 
 def update_listbox():
+    global event_listbox
     try:
         event_listbox.delete(0, END)
         for i, event_data in enumerate(embedded_events):
@@ -783,7 +786,7 @@ def update_listbox():
 
 # Function to rearrange events and adjust timings
 def rearrange_events():
-    global embedded_events, delay_between_rounds
+    global embedded_events, delay_between_rounds, event_listbox
     rearrange_window = Toplevel(root)
     icon_per_os(rearrange_window)
     rearrange_window.title("Rearrange Events")
@@ -840,18 +843,18 @@ def rearrange_events():
 
     # Function to load a selected preset
     def load_preset():
-        global embedded_events, delay_between_rounds, event_listbox
+        global embedded_events, delay_between_rounds
         load_window = Toplevel(root)
         icon_per_os(load_window)
         load_window.title("Load Preset")
         load_window.geometry("300x500")
-        event_listbox = Listbox(load_window, width=40, height=15)
-        event_listbox.pack(pady=10)
+        preset_listbox = Listbox(load_window, width=40, height=15)
+        preset_listbox.pack(pady=10)
 
         # List all .txt files in the presets directory
         presets = [f for f in os.listdir(presets_dir) if f.endswith(".txt")]
         for preset in presets:
-            event_listbox.insert(END, preset[:-4])
+            preset_listbox.insert(END, preset[:-4])
 
         def upload_preset():
             file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
@@ -867,14 +870,14 @@ def rearrange_events():
 
         def delete_selected_preset():
             global embedded_events
-            selected_preset = event_listbox.curselection()
+            selected_preset = preset_listbox.curselection()
             if selected_preset:
-                preset_name = event_listbox.get(selected_preset)
+                preset_name = preset_listbox.get(selected_preset)
                 preset_path = os.path.join(presets_dir, f"{preset_name}.txt")
                 if os.path.exists(preset_path):
                     os.remove(preset_path)
                     print(f"Deleted preset: {preset_name}")
-                    event_listbox.delete(selected_preset)
+                    preset_listbox.delete(selected_preset)
                     embedded_events = []
                     update_event_overlays()
 
@@ -882,7 +885,7 @@ def rearrange_events():
             load_window,
             text="Load Selected Preset",
             command=lambda: (
-                load_selected(event_listbox.curselection()),
+                load_selected(preset_listbox.curselection()),
                 load_window.destroy(),
                 rearrange_window.destroy(),
             ),
@@ -1088,7 +1091,7 @@ root.bind("<Control-z>", lambda event: undo())
 root.bind("<Control-Z>", lambda event: undo())
 root.bind("<Control-Shift-Z>", lambda event: redo())
 
-if isWindows:  # TODO: Make it work on Ubuntu and MacOS.
+if isWindows:
     create_overlay()
 
 create_button = tk.Button(root, text="Create Event", command=create_event)
