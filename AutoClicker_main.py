@@ -38,7 +38,7 @@ max_random_time = 4000
 presets_dir = "Presets"
 special_keys = Constants.special_keys
 pressed_keys = set()
-CTRL_KEY = "command" if os.name == "Darwin" or os.name == "posix" else "ctrl"
+CTRL_KEY = "command" if os.name == "Darwin" else "ctrl"
 
 
 embedded_events = []
@@ -116,7 +116,7 @@ def wait_for_key(key):
 
 
 #####################################################
-# Overlay Control TODO: There appears to be a duplicate method. Check.
+# Overlay Control
 #####################################################
 
 
@@ -223,14 +223,6 @@ def get_monitor_for_position(x, y):
 #####################################################
 # Event Control
 #####################################################
-
-
-# # Function to modify an event TODO: Modify to save details and delete event. Then create a new event in place. Update rearrange window details after.
-def modify_event(new_event, idx=None):
-    if 0 <= idx < len(embedded_events):
-        original_type = embedded_events[idx]["type"]
-        original_type = embedded_events[idx]["type"]
-        print(f"Event {idx + 1} modified: {new_event}")
 
 
 def save_details(
@@ -725,7 +717,7 @@ def open_detailed_window(idx, rearrange_window=None):
             )
             move_event.pack(pady=10)
 
-        save_button = tk.Button(  ##TODO: Test
+        save_button = tk.Button(
             detailed_event_window,
             text="Save",
             command=lambda: (
