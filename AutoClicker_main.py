@@ -226,7 +226,7 @@ def get_monitor_for_position(x, y):
 
 
 def save_details(
-    idx, new_timeout, new_random_time, new_press_count=-1, new_click_type="left"
+    idx, new_timeout, new_random_time, new_press_count=1, new_click_type="left"
 ):
     try:
         if (
@@ -280,57 +280,51 @@ def move_selected_event(window=None, idx=None):
         window.destroy()
 
 
-# Function to create an event
-def create_event():  ##TODO: Rewrite to be several new buttons.
-    global is_text_mode
-    x, y = pyautogui.position()
-    if is_pressed("ctrl_l") or is_pressed("ctrl_r") or is_pressed("ctrl"):
-        if not is_text_mode:
-            is_text_mode = True
-            open_text_input()
-        else:
-            save_text()
+def add_event(
+    event_type: str,
+    *,
+    grab_cursor: bool = False,
+    delay: int = 100,
+    random_time: bool = False,
+    extra: dict | None = None,
+) -> None:
+    """
+    Create a new event and push it to `embedded_events`.
 
-    if is_pressed("w"):
-        new_event = embedded_events.append(
-            {
-                "type": "wait",
-                "delay": 100,
-                "random_time": False,
-            }
-        )
-        open_detailed_window(len(embedded_events) - 1)
-    elif is_pressed("shift"):
-        print("Waiting for 'space' key press to create the scroll event...")
+    Parameters
+    ----------
+    event_type         : 'click' | 'scroll' | 'wait' | …
+    grab_cursor   : wait for <Space> and capture mouse (True/False)
+    delay         : universal per‑event delay (ms)
+    random_time   : universal random‑time flag
+    extra         : dict with event‑specific fields to merge in
+    """
+    # ── capture position if needed ─────────────────────────────
+    if grab_cursor:
+        print(f"Press <Space> to capture the {event_type} position…")
         wait_for_key("space")
-
-        new_event = embedded_events.append(
-            {
-                "type": "scroll",
-                "position": (x, y),
-                "press_count": 300,
-                "delay": 100,
-                "random_time": False,
-            }
-        )
+        x, y = pyautogui.position()
     else:
-        print("Waiting for 'space' key press to create the event...")
-        wait_for_key("space")
+        x = y = None
 
-        new_event = embedded_events.append(
-            {
-                "type": "click",
-                "position": (x, y),
-                "click_type": "left",
-                "press_count": 1,
-                "delay": 100,
-                "random_time": False,
-            }
-        )
-        print(f"Event created at position: ({x}, {y})")
+    # ── assemble event dict ───────────────────────────────────
+    event = {
+        "type": event_type,
+        "delay": delay,
+        "random_time": random_time,
+    }
+    if grab_cursor:
+        event["position"] = (x, y)
+    if extra:
+        event.update(extra)
 
-    add_to_undo_stack(("create", new_event))
+    # ── commit & UI refresh ───────────────────────────────────
+    embedded_events.append(event)
+    add_to_undo_stack(("create", event))
+
+    print("Event created:", event)
     update_event_overlays()
+
 
 
 # Function to delete the newest event
@@ -494,6 +488,14 @@ def type_text(text, delay):
         i += 1
         time.sleep(delay)
 
+def create_text_event():
+    global is_text_mode
+    if not is_text_mode:
+        is_text_mode = True
+        open_text_input()
+    else:
+        save_text()
+        update_event_overlays()
 
 #####################################################
 # Presets
@@ -725,8 +727,8 @@ def open_detailed_window(idx, rearrange_window=None):
                     idx,
                     timeout_entry.get(),
                     random_time_var.get(),
-                    int(press_count_entry.get()),
-                    clicked.get(),
+                    1 if embedded_events[idx]["type"] == "wait" else int(press_count_entry.get()),
+                    "left" if embedded_events[idx]["type"] == "wait" else clicked.get(),
                 ),
                 detailed_event_window.destroy(),
             ),
@@ -1086,25 +1088,32 @@ root.bind("<Control-Shift-Z>", lambda event: redo())
 if isWindows:
     create_overlay()
 
-create_button = tk.Button(root, text="Create Event", command=create_event)
-create_button.pack(pady=10)
+# ──────────────────────────────────────────────────────────────
+#  Root GUI: horizontal bar with C / S / W / T buttons
+# ──────────────────────────────────────────────────────────────
+event_bar = tk.Frame(root)
+event_bar.pack(pady=10)                       # keep the rest of the layout
 
-delete_button = tk.Button(root, text="Delete Newest Event", command=delete_event)
-delete_button.pack(pady=10)
+btn_click  = tk.Button(event_bar, text="C", width=1, command=lambda: add_event("click", grab_cursor=True, extra={"click_type": "left", "press_count": 1},))
+btn_scroll = tk.Button(event_bar, text="S", width=1, command=lambda: add_event("scroll", grab_cursor=True, extra={"press_count": 300}, ))
+btn_wait   = tk.Button(event_bar, text="W", width=1, command=lambda: (add_event("wait"), open_detailed_window(len(embedded_events) - 1)))
+btn_text   = tk.Button(event_bar, text="T", width=1, command=create_text_event)
 
-rearrange_button = tk.Button(root, text="Rearrange Events", command=rearrange_events)
-rearrange_button.pack(pady=10)
+for b in (btn_click, btn_scroll, btn_wait, btn_text):
+    b.pack(side="left", padx=2)               # horizontal alignment
 
-start_button = tk.Button(root, text="Start Program", command=start_program)
-start_button.pack(pady=10)
+# ──────────────────────────────────────────────────────────────
+#  Existing control buttons (unchanged)
+# ──────────────────────────────────────────────────────────────
+delete_button           = tk.Button(root, text="Delete Newest Event", command=delete_event)
+rearrange_button        = tk.Button(root, text="Rearrange Events",    command=rearrange_events)
+start_button            = tk.Button(root, text="Start Program",       command=start_program)
+always_on_top_button    = tk.Button(root, text="Always on Top: Off",  command=toggle_always_on_top)
+close_button            = tk.Button(root, text="Close & Save",        command=close_and_save)
 
-always_on_top_button = tk.Button(
-    root, text="Always on Top: Off", command=toggle_always_on_top
-)
-always_on_top_button.pack(pady=10)
-
-close_button = tk.Button(root, text="Close & Save", command=close_and_save)
-close_button.pack(pady=10)
+for btn in (delete_button, rearrange_button, start_button,
+            always_on_top_button, close_button):
+    btn.pack(pady=10)                         # keep your existing vertical stack
 
 listener = keyboard.Listener(on_press=on_press, on_release=on_release)
 listener.start()
