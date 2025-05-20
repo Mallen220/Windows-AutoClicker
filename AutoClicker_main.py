@@ -12,6 +12,7 @@ import pyautogui
 import pyperclip
 from screeninfo import get_monitors
 from PIL import Image, ImageTk
+import cv2
 
 import Constants
 
@@ -503,25 +504,51 @@ def open_conditional_window(idx=None):
 
     conditional_window = Toplevel(root)
     conditional_window.title("Conditional Logic")
-    tk.Label(conditional_window, text="Kind").grid(row=0, column=0)
+    conditional_window.geometry("380x200")
+    tk.Label(conditional_window, text="Kind").grid(row=0, column=0, pady=10)
     kind_var = tk.StringVar(value=embedded_events[idx]["cond_kind"] if idx is not None else "if")
-    tk.OptionMenu(conditional_window, kind_var, "if", "while", "if_else").grid(row=0, column=1)
+    tk.OptionMenu(conditional_window, kind_var, "if", "while", "if_else").grid(row=0, column=1, pady=10)
 
-    tk.Label(conditional_window, text="Jump to when true").grid(row=1, column=0)
-    true_var = tk.IntVar(value=0)
-    tk.Entry(conditional_window, textvariable=true_var, width=5).grid(row=1, column=1)
+    option_labels = [
+        event_to_string(i) for i in range(len(embedded_events))
+    ]
+    if option_labels == []:
+        option_labels = ["No events found, select later. (-1)"]
 
-    tk.Label(conditional_window, text="Jump to when false").grid(row=2, column=0)
-    false_var = tk.IntVar(value=-1)                # -1 → fall-through
-    false_entry = tk.Entry(conditional_window, textvariable=false_var, width=5)
-    false_entry.grid(row=2, column=1)
+    label_to_index = {label: i for i, label in enumerate(option_labels)}
+
+    def make_jump_dropdown(row_num, default_index, label_text):
+        default_label = next(
+            (label for label, idx in label_to_index.items() if idx == default_index),
+            option_labels[0],
+        )
+        selected_var = tk.StringVar(value=default_label)
+        tk.Label(conditional_window, text=label_text).grid(row=row_num, column=0, sticky="e")
+        dropdown = tk.OptionMenu(conditional_window, selected_var, *option_labels)
+        dropdown.grid(row=row_num, column=1, sticky="w", pady=5)
+        return selected_var, dropdown
+
+    true_target_index = (
+        embedded_events[idx]["true_target"] if idx is not None else 0
+    )
+    false_target_index = (
+        embedded_events[idx].get("false_target", -1) if idx is not None else -1
+    )
+
+    true_target_var, _ = make_jump_dropdown(
+        row_num=1, default_index=true_target_index, label_text="Jump to when true"
+    )
+
+    false_target_var, false_dropdown = make_jump_dropdown(
+        row_num=2, default_index=false_target_index, label_text="Jump to when false"
+    )
 
     # Disable the “false” entry except for if_else
-    def toggle_false(*_):
+    def update_false_state(*_):
         state = "normal" if kind_var.get() == "if_else" else "disabled"
-        false_entry.configure(state=state)
-    kind_var.trace_add("write", toggle_false)
-    toggle_false()
+        false_dropdown.configure(state=state)
+    kind_var.trace_add("write", update_false_state)
+    update_false_state()
 
     # ---------------------------------------------------------------------------
     # main routine – bound to SPACE
@@ -648,16 +675,18 @@ def open_conditional_window(idx=None):
         canvas.bind("<ButtonRelease-1>", _on_release)
 
 
-    root.bind_all("<space>", grab_image)
-    tk.Button(conditional_window, text="Capture Screen",
-              command=grab_image).grid(row=3, columnspan=2)
+    conditional_window.bind("<space>", grab_image)
+    capture_button = tk.Button(conditional_window, text="Capture Image (Press Space)" if (img_path_var.get() == "" and idx is None) else "Replace Image",
+              command=lambda: (grab_image, capture_button.config(text="Replace Image")))
+    capture_button.grid(row=3, columnspan=2)
 
     def save_conditional():
+        print("Default: ", img_path_var.get())
         cond = {
             "cond_kind": kind_var.get(),
-            "image_path": embedded_events[idx]["image_path"] if (img_path_var.get() is None and idx is not None) else img_path_var.get(),
-            "true_target": true_var.get(),
-            "false_target": None if kind_var.get() != "if_else" else false_var.get(),
+            "image_path": embedded_events[idx]["image_path"] if (img_path_var.get() == "" and idx is not None) else img_path_var.get(),
+            "true_target": label_to_index[true_target_var.get()],
+            "false_target": None if kind_var.get() != "if_else" else label_to_index[false_target_var.get()],
         }
         if idx is None:
             add_event("conditional", extra=cond,)
@@ -937,25 +966,14 @@ def update_listbox():
     global event_listbox
     try:
         event_listbox.delete(0, END)
-        for i, event_data in enumerate(embedded_events):
+        for i in range(len(embedded_events)):
             try:
-                if event_data["type"] == "click" or event_data["type"] == "scroll":
-                    event_listbox.insert(
-                        END, f"Event {i + 1}: {event_data['position']}"
-                    )
-                elif event_data["type"] == "text":
-                    event_listbox.insert(END, f"Event {i + 1}: {event_data['content']}")
-                elif event_data["type"] == "wait":
-                    event_listbox.insert(
-                        END, f"Event {i + 1}: Wait {event_data['delay'] / 1000} s"
-                    )
-                elif event_data["type"] == "conditional":
-                    event_listbox.insert(
-                        END, f"Event {i + 1}: Conditional ({event_data['cond_kind']}) travels to {event_data['true_target']}"
-                    )
+                event_listbox.insert(END, event_to_string(i))
+                #     )
             except Exception:
                 event_listbox.insert(END, f"Event {i + 1}: error loading event data")
-    except Exception:
+    except Exception as error:
+        print(error)
         print("Listbox does not exist. Failed to updated listbox. Exiting...")
 
 
@@ -1131,12 +1149,12 @@ def start_program():
         i = 0
         n = len(embedded_events)
         while is_running:
-            event = embedded_events[i]
             if i >= n:
                 i = 0
-
             if not is_running:
                 break
+
+            event = embedded_events[i]
 
             event_type = event["type"]
 
@@ -1190,11 +1208,15 @@ def start_program():
                 print(f"Waiting: {delay} s")
                 time.sleep(delay)
             elif event_type == "conditional":
-                img_found = pyautogui.locateOnScreen(
-                    event["image_path"], confidence=0.85, grayscale=True
-                ) is not None
+                try:
+                    img_found = pyautogui.locateOnScreen(
+                        event["image_path"], confidence=0.85, grayscale=True
+                    ) is not None
+                except Exception as e:
+                    print(f"Error locating image: {e}")
+                    img_found = None
                 if img_found is not None:
-                    print(f"Condition met on screen!")
+                    print(f"Condition met!")
 
                 kind = event["cond_kind"]
                 if kind == "if":
@@ -1209,8 +1231,8 @@ def start_program():
                 print("Traveling to event ", i)
                 continue
 
-        time.sleep(random_time_in_range(400, 3000) / 1000)
-        i += 1
+            time.sleep(random_time_in_range(400, 3000) / 1000)
+            i += 1
 
     threading.Thread(target=run_events).start()
     monitor_space_key()
@@ -1258,12 +1280,27 @@ def monitor_space_key():
     thread = threading.Thread(target=stop_on_space_key)
     thread.start()
 
+def event_to_string(idx):
+    try:
+        event = embedded_events[idx]
+        t = event["type"]
+        match t:
+            case "click" | "scroll": p = f'({event["position"][0]}, {event["position"][1]})'
+            case "text":            p = f'"{event["content"]}"'
+            case "wait":            p = f'{event["delay"]} ms'
+            case "conditional":     p = event["cond_kind"]
+            case _:                 p = ""
+        return f"Event {idx + 1}: {t} {p}"
+    except Exception as e:
+        print(f"Error converting event to string: {e}")
+        return f"Event {idx + 1}: Error"
+
 
 root = tk.Tk()
 root.title("Event Controller")
 icon_per_os(root)
 root.attributes("-alpha", 0.85)
-root.geometry("225x350")
+root.geometry("250x325")
 
 
 # Function to enable dragging the window by clicking anywhere
