@@ -7,6 +7,7 @@ import time
 import tkinter as tk
 from tkinter import END, filedialog, Listbox, simpledialog, SINGLE, Toplevel, Variable
 
+import mss
 from pynput import keyboard
 import pyautogui
 import pyperclip
@@ -555,13 +556,18 @@ def open_conditional_window(idx=None):
     # ---------------------------------------------------------------------------
     def grab_image(event=None):
         """
-        Hide the GUI, capture the current active screen, present CropWindow.
-        The final PNG path winds up in img_path_var.
+        Hide the GUI, capture all screens as one image, and let user crop.
+        Final image path is stored in img_path_var.
         """
-        conditional_window.withdraw()  # hide everything
-        time.sleep(0.2)  # make sure it is off-screen
-        full_shot = pyautogui.screenshot()  # PIL Image
-        cropped_window(full_shot)  # user handles the rest
+        conditional_window.withdraw()
+        time.sleep(0.2)  # allow window to vanish
+
+        with mss.mss() as sct:
+            monitor = sct.monitors[0]  # full virtual display
+            raw_img = sct.grab(monitor)
+            pil_img = Image.frombytes('RGB', raw_img.size, raw_img.rgb)
+
+        cropped_window(pil_img)  # pass to cropping window
 
     def cropped_window(pil_img):
         def save_and_finish(pil_img):
