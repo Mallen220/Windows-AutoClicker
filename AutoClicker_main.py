@@ -11,6 +11,7 @@ from pynput import keyboard
 import pyautogui
 import pyperclip
 from screeninfo import get_monitors
+from PIL import Image, ImageTk
 
 import Constants
 
@@ -39,6 +40,9 @@ presets_dir = "Presets"
 special_keys = Constants.special_keys
 pressed_keys = set()
 CTRL_KEY = "command" if os.name == "Darwin" else "ctrl"
+
+SCREENSHOT_DIR = "conditions"
+os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
 
 embedded_events = []
@@ -226,39 +230,30 @@ def get_monitor_for_position(x, y):
 
 
 def save_details(
-    idx, new_timeout, new_random_time, new_press_count=1, new_click_type="left"
+    idx, new_settings=None
 ):
-    try:
-        if (
-            embedded_events[idx]["type"] == "scroll"
-            or embedded_events[idx]["type"] == "click"
-        ):
-            if new_press_count == -1:
-                if embedded_events[idx]["type"] == "scroll":
-                    new_press_count = 300
-                else:
-                    new_press_count = 1
+    if new_settings is not None:
+        global embedded_events
 
-            try:
-                embedded_events[idx]["delay"] = int(new_timeout)
-                embedded_events[idx]["press_count"] = new_press_count
-                embedded_events[idx]["click_type"] = new_click_type
-                embedded_events[idx]["random_time"] = new_random_time
-                print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
+        # Basic validation
+        if new_settings is None or not new_settings:
+            return
+        if not (0 <= idx < len(embedded_events)):
+            print(f"[save_details] idx {idx} out of range")
+            return
 
-            except ValueError:
-                print("Please enter a valid number for the detailed window.")
-        elif embedded_events[idx]["type"] == "wait":
-            try:
-                embedded_events[idx]["delay"] = int(new_timeout)
-                embedded_events[idx]["random_time"] = new_random_time
-                print(f"Updated details of Event {idx + 1}: {embedded_events[idx]}")
-            except ValueError:
-                print("Please enter a valid number for the detailed window.")
-    except Exception as e:
-        print(
-            "Wow! An error occurred. Are there no events? embedded_events[idx] is likely out of range. "
-        )
+        event = embedded_events[idx]
+
+        # Apply the updates
+        for key, value in new_settings.items():
+            if value is None:
+                continue  # skip “no-op” entries
+            event[key] = value  # add or replace
+
+        # No need to re-assign; `event` is the same dict object,
+        # but doing it explicitly avoids surprises if you ever
+        # switch to an immutable structure.
+        embedded_events[idx] = event
     update_listbox()
 
 
@@ -293,7 +288,7 @@ def add_event(
 
     Parameters
     ----------
-    event_type         : 'click' | 'scroll' | 'wait' | …
+    event_type         : 'click' | 'scroll' | 'wait' | 'conditional' | …
     grab_cursor   : wait for <Space> and capture mouse (True/False)
     delay         : universal per‑event delay (ms)
     random_time   : universal random‑time flag
@@ -497,6 +492,183 @@ def create_text_event():
         save_text()
         update_event_overlays()
 
+
+#####################################################
+# Conditional Control
+#####################################################
+
+
+def open_conditional_window(idx=None):
+    img_path_var = tk.StringVar()
+
+    conditional_window = Toplevel(root)
+    conditional_window.title("Conditional Logic")
+    tk.Label(conditional_window, text="Kind").grid(row=0, column=0)
+    kind_var = tk.StringVar(value=embedded_events[idx]["cond_kind"] if idx is not None else "if")
+    tk.OptionMenu(conditional_window, kind_var, "if", "while", "if_else").grid(row=0, column=1)
+
+    tk.Label(conditional_window, text="Jump to when true").grid(row=1, column=0)
+    true_var = tk.IntVar(value=0)
+    tk.Entry(conditional_window, textvariable=true_var, width=5).grid(row=1, column=1)
+
+    tk.Label(conditional_window, text="Jump to when false").grid(row=2, column=0)
+    false_var = tk.IntVar(value=-1)                # -1 → fall-through
+    false_entry = tk.Entry(conditional_window, textvariable=false_var, width=5)
+    false_entry.grid(row=2, column=1)
+
+    # Disable the “false” entry except for if_else
+    def toggle_false(*_):
+        state = "normal" if kind_var.get() == "if_else" else "disabled"
+        false_entry.configure(state=state)
+    kind_var.trace_add("write", toggle_false)
+    toggle_false()
+
+    # ---------------------------------------------------------------------------
+    # main routine – bound to SPACE
+    # ---------------------------------------------------------------------------
+    def grab_image(event=None):
+        """
+        Hide the GUI, capture the current active screen, present CropWindow.
+        The final PNG path winds up in img_path_var.
+        """
+        conditional_window.withdraw()  # hide everything
+        time.sleep(0.2)  # make sure it is off-screen
+        full_shot = pyautogui.screenshot()  # PIL Image
+        cropped_window(full_shot)  # user handles the rest
+
+    def cropped_window(pil_img):
+        def save_and_finish(pil_img):
+            """
+            Save the cropped PIL image, restore the main window, update img_path_var.
+            """
+            filename = os.path.join(
+                SCREENSHOT_DIR, f"cond_{int(time.time())}.png"
+            )
+            pil_img.save(filename)
+            conditional_window.deiconify()
+
+            img_path_var.set(filename)
+
+        """
+        Full-size window containing the captured screen image.
+        If the screenshot is larger than the main display, we shrink it
+        while keeping aspect ratio.  Drag to pick a crop, release to save.
+        """
+        captured_window = Toplevel(root)
+        captured_window.title("Drag to crop – release to save")
+        captured_window.attributes("-topmost", True)
+
+        # ------------------------------------------------------------
+        # down-scale if needed so the preview fits on the current screen
+        # ------------------------------------------------------------
+        scr_w = captured_window.winfo_screenwidth()
+        scr_h = captured_window.winfo_screenheight()
+        img_w, img_h = pil_img.size
+
+        scale = min(scr_w / img_w, scr_h / img_h, 1.0)  # never > 1
+        scale = scale  # keep for later
+
+        if scale < 1.0:
+            disp_w, disp_h = int(img_w * scale), int(img_h * scale)
+            display_img = pil_img.resize((disp_w, disp_h), Image.LANCZOS)
+        else:
+            display_img = pil_img  # no scaling
+
+        pil_img_orig = pil_img  # full-res copy
+        tk_img = ImageTk.PhotoImage(display_img)
+
+        start_x = start_y = None
+        rect_id = None
+
+        canvas = tk.Canvas(
+            captured_window,
+            width=tk_img.width(),
+            height=tk_img.height(),
+            cursor="cross"
+        )
+        canvas.pack(expand=True)
+        canvas.create_image(0, 0, anchor="nw", image=tk_img)
+
+        canvas.image = tk_img
+        pil_img_orig = pil_img
+        scale_factor = scale
+        start_x = start_y = None
+        rect_id = None
+
+        # ------------------------------------------------------------
+        # mouse callbacks
+        # ------------------------------------------------------------
+        def _on_press(event):
+            nonlocal start_x, start_y, rect_id
+            start_x, start_y = event.x, event.y
+            if rect_id is not None:
+                canvas.delete(rect_id)
+            rect_id = canvas.create_rectangle(
+                start_x, start_y, event.x, event.y,
+                outline="red", width=2
+            )
+
+        def _on_drag(event):
+            nonlocal start_x, start_y, rect_id
+            canvas.coords(
+                rect_id,
+                start_x, start_y, event.x, event.y
+            )
+
+        def _on_release(event):
+            nonlocal start_x, start_y, rect_id
+            # --- coords on the (possibly scaled) preview ---
+            left_p, upper_p = min(start_x, event.x), min(start_y, event.y)
+            right_p, lower_p = max(start_x, event.x), max(start_y, event.y)
+
+            # ignore clicks with no drag
+            if right_p - left_p < 2 or lower_p - upper_p < 2:
+                captured_window.destroy()
+                conditional_window.deiconify()
+                return
+
+            # --- map back to original screenshot coordinates ---
+            inv = 1.0 / scale
+            left_o = int(left_p * inv)
+            upper_o = int(upper_p * inv)
+            right_o = int(right_p * inv)
+            lower_o = int(lower_p * inv)
+
+            cropped = pil_img_orig.crop((left_o, upper_o, right_o, lower_o))
+            save_and_finish(cropped)  # reuse existing helper
+            captured_window.destroy()
+
+        # ------------------------------------------------------------
+        # canvas setup
+        # ------------------------------------------------------------
+
+        # mouse bindings
+        canvas.bind("<Button-1>", _on_press)
+        canvas.bind("<B1-Motion>", _on_drag)
+        canvas.bind("<ButtonRelease-1>", _on_release)
+
+
+    root.bind_all("<space>", grab_image)
+    tk.Button(conditional_window, text="Capture Screen",
+              command=grab_image).grid(row=3, columnspan=2)
+
+    def save_conditional():
+        cond = {
+            "cond_kind": kind_var.get(),
+            "image_path": embedded_events[idx]["image_path"] if (img_path_var.get() is None and idx is not None) else img_path_var.get(),
+            "true_target": true_var.get(),
+            "false_target": None if kind_var.get() != "if_else" else false_var.get(),
+        }
+        if idx is None:
+            add_event("conditional", extra=cond,)
+        else:
+            save_details(idx, cond)
+        update_listbox()
+        conditional_window.destroy()
+    tk.Button(conditional_window, text="Save", command=save_conditional).grid(row=4, columnspan=2)
+
+
+
 #####################################################
 # Presets
 #####################################################
@@ -517,6 +689,7 @@ def save_preset(name=None):
     with open(preset_path, "w") as f:
         f.write(f"- {name}\n")
         f.write(f"Delay: {delay_between_rounds}\n")
+        # print(embedded_events)
         for event_data in embedded_events:
             f.write(f"{str(event_data)}\n")
         f.write("\n")
@@ -725,10 +898,10 @@ def open_detailed_window(idx, rearrange_window=None):
             command=lambda: (
                 save_details(
                     idx,
-                    timeout_entry.get(),
-                    random_time_var.get(),
-                    1 if embedded_events[idx]["type"] == "wait" else int(press_count_entry.get()),
-                    "left" if embedded_events[idx]["type"] == "wait" else clicked.get(),
+                    {"delay": int(timeout_entry.get()),
+                     "random_time": random_time_var.get(),
+                     "press_count": 1 if embedded_events[idx]["type"] == "wait" else int(press_count_entry.get()),
+                     "click_type": "left" if embedded_events[idx]["type"] == "wait" else clicked.get()},
                 ),
                 detailed_event_window.destroy(),
             ),
@@ -742,6 +915,10 @@ def open_detailed_window(idx, rearrange_window=None):
         else:
             save_text()
 
+        while rearrange_window is not None:
+            rearrange_window.destroy()
+    elif embedded_events[idx]["type"] == "conditional":
+        open_conditional_window(idx)
         while rearrange_window is not None:
             rearrange_window.destroy()
 
@@ -772,6 +949,10 @@ def update_listbox():
                     event_listbox.insert(
                         END, f"Event {i + 1}: Wait {event_data['delay'] / 1000} s"
                     )
+                elif event_data["type"] == "conditional":
+                    event_listbox.insert(
+                        END, f"Event {i + 1}: Conditional ({event_data['cond_kind']}) travels to {event_data['true_target']}"
+                    )
             except Exception:
                 event_listbox.insert(END, f"Event {i + 1}: error loading event data")
     except Exception:
@@ -788,13 +969,7 @@ def rearrange_events():
     event_listbox = Listbox(rearrange_window, selectmode=SINGLE, width=40, height=10)
     event_listbox.pack(pady=10)
 
-    for i, event_data in enumerate(embedded_events):
-        if event_data["type"] == "click" or event_data["type"] == "scroll":
-            event_listbox.insert(END, f"Event {i + 1}: {event_data['position']}")
-        elif event_data["type"] == "text":
-            event_listbox.insert(END, f"Event {i + 1}: {event_data['content']}")
-        elif event_data["type"] == "wait":
-            event_listbox.insert(END, f"Event {i + 1}: Wait {event_data['delay']} ms")
+    update_listbox()
 
     delay_label = tk.Label(rearrange_window, text="Delay Between Rounds (ms):")
     delay_label.pack(pady=5)
@@ -953,64 +1128,89 @@ def start_program():
         time.sleep(delay)
 
     def run_events():
+        i = 0
+        n = len(embedded_events)
         while is_running:
-            for event in embedded_events:
-                if not is_running:
-                    break
+            event = embedded_events[i]
+            if i >= n:
+                i = 0
 
-                event_type = event["type"]
+            if not is_running:
+                break
 
-                if event_type in ("click", "scroll"):
-                    x, y = event["position"]
-                    press_count = event["press_count"]
+            event_type = event["type"]
 
-                    if event_type == "click":
-                        pyautogui.click(
-                            x,
-                            y,
-                            button=str(event["click_type"]),
-                            clicks=int(press_count),
-                        )
-                        print(
-                            f"Clicked {event['click_type']} {press_count} time(s) at position: ({x}, {y})"
-                        )
-                    else:  # scroll
-                        pyautogui.scroll(press_count, x=x, y=y)
-                        print(f"Scrolled {press_count} time(s) at position: ({x}, {y})")
+            if event_type in ("click", "scroll"):
+                x, y = event["position"]
+                press_count = event["press_count"]
 
-                    sleep_appropriately(event)
+                if event_type == "click":
+                    pyautogui.click(
+                        x,
+                        y,
+                        button=str(event["click_type"]),
+                        clicks=int(press_count),
+                    )
+                    print(
+                        f"Clicked {event['click_type']} {press_count} time(s) at position: ({x}, {y})"
+                    )
+                else:  # scroll
+                    pyautogui.scroll(press_count, x=x, y=y)
+                    print(f"Scrolled {press_count} time(s) at position: ({x}, {y})")
 
-                elif event_type == "text":
-                    content = event["content"]
+                sleep_appropriately(event)
 
-                    hotkey_map = {
-                        "Copy": [CTRL_KEY, "c"],
-                        "Paste": [CTRL_KEY, "v"],
-                        "Print": [CTRL_KEY, "p"],
-                        "Control Right Arrow": [CTRL_KEY, "right"],
-                    }
+            elif event_type == "text":
+                content = event["content"]
 
-                    if content in hotkey_map:
-                        pyautogui.hotkey(*hotkey_map[content])
-                    elif event["delay"] == 0:
-                        pyperclip.copy(content)
-                        pyautogui.hotkey(CTRL_KEY, "v")
-                    else:
-                        delay = (
-                            random_time_in_range(min_random_time, max_random_time)
-                            if event["random_time"]
-                            else event["delay"] / 1000
-                        )
-                        type_text(content, delay)
+                hotkey_map = {
+                    "Copy": [CTRL_KEY, "c"],
+                    "Paste": [CTRL_KEY, "v"],
+                    "Print": [CTRL_KEY, "p"],
+                    "Control Right Arrow": [CTRL_KEY, "right"],
+                }
 
-                    print(f"Typed text: {content}")
+                if content in hotkey_map:
+                    pyautogui.hotkey(*hotkey_map[content])
+                elif event["delay"] == 0:
+                    pyperclip.copy(content)
+                    pyautogui.hotkey(CTRL_KEY, "v")
+                else:
+                    delay = (
+                        random_time_in_range(min_random_time, max_random_time)
+                        if event["random_time"]
+                        else event["delay"] / 1000
+                    )
+                    type_text(content, delay)
 
-                elif event_type == "wait":
-                    delay = event["delay"] / 1000
-                    print(f"Waiting: {delay} s")
-                    time.sleep(delay)
+                print(f"Typed text: {content}")
 
-            time.sleep(random_time_in_range(400, 3000) / 1000)
+            elif event_type == "wait":
+                delay = event["delay"] / 1000
+                print(f"Waiting: {delay} s")
+                time.sleep(delay)
+            elif event_type == "conditional":
+                img_found = pyautogui.locateOnScreen(
+                    event["image_path"], confidence=0.85, grayscale=True
+                ) is not None
+                if img_found is not None:
+                    print(f"Condition met on screen!")
+
+                kind = event["cond_kind"]
+                if kind == "if":
+                    i = event["true_target"] if img_found else i + 1
+                elif kind == "if_else":
+                    i = event["true_target"] if img_found else (
+                        event["false_target"] if event["false_target"] >= 0 else i + 1
+                    )
+                elif kind == "while":
+                    i = event["true_target"] if img_found else i + 1
+
+                print("Traveling to event ", i)
+                continue
+
+        time.sleep(random_time_in_range(400, 3000) / 1000)
+        i += 1
 
     threading.Thread(target=run_events).start()
     monitor_space_key()
@@ -1094,13 +1294,15 @@ if isWindows:
 event_bar = tk.Frame(root)
 event_bar.pack(pady=10)                       # keep the rest of the layout
 
-btn_click  = tk.Button(event_bar, text="C", width=1, command=lambda: add_event("click", grab_cursor=True, extra={"click_type": "left", "press_count": 1},))
-btn_scroll = tk.Button(event_bar, text="S", width=1, command=lambda: add_event("scroll", grab_cursor=True, extra={"press_count": 300}, ))
-btn_wait   = tk.Button(event_bar, text="W", width=1, command=lambda: (add_event("wait"), open_detailed_window(len(embedded_events) - 1)))
-btn_text   = tk.Button(event_bar, text="T", width=1, command=create_text_event)
+btn_click  = tk.Button(event_bar, text="C", width=0, command=lambda: add_event("click", grab_cursor=True, extra={"click_type": "left", "press_count": 1},))
+btn_scroll = tk.Button(event_bar, text="S", width=0, command=lambda: add_event("scroll", grab_cursor=True, extra={"press_count": 300}, ))
+btn_wait   = tk.Button(event_bar, text="W", width=0, command=lambda: (add_event("wait"), open_detailed_window(len(embedded_events) - 1)))
+btn_text   = tk.Button(event_bar, text="T", width=0, command=create_text_event)
+btn_logic   = tk.Button(event_bar, text="L", width=0, command=open_conditional_window)
 
-for b in (btn_click, btn_scroll, btn_wait, btn_text):
-    b.pack(side="left", padx=2)               # horizontal alignment
+
+for b in (btn_click, btn_scroll, btn_wait, btn_text, btn_logic):
+    b.pack(side="left", padx=0)               # horizontal alignment
 
 # ──────────────────────────────────────────────────────────────
 #  Existing control buttons (unchanged)

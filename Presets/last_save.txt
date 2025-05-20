@@ -1,4 +1,4 @@
 - last_save
 Delay: 500
-{'type': 'click', 'delay': 100, 'random_time': False, 'position': (502, 281), 'click_type': 'left', 'press_count': 1}
+{'type': 'conditional', 'delay': 100, 'random_time': False, 'cond_kind': 'if', 'image_path': 'conditions/cond_1747761220.png', 'true_target': 0, 'false_target': None}
 
