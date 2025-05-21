@@ -1,5 +1,6 @@
 - last_save
 Delay: 500
-{'type': 'conditional', 'delay': 100, 'random_time': False, 'cond_kind': 'if', 'image_path': '', 'true_target': 0, 'false_target': None}
-{'type': 'click', 'delay': 100, 'random_time': False, 'position': (478, 329), 'click_type': 'left', 'press_count': 1}
+{'type': 'conditional', 'delay': 100, 'random_time': False, 'cond_kind': 'if', 'image_path': 'conditions/cond_1747786715.png', 'inverted_condition': False, 'true_target': 0, 'false_target': None}
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (545, 337), 'click_type': 'left', 'press_count': 1}
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (167, 475), 'click_type': 'left', 'press_count': 1}
 

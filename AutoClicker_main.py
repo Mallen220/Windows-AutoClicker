@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import END, filedialog, Listbox, simpledialog, SINGLE, Toplevel, Variable
 
 import mss
+import numpy as np
 from pynput import keyboard
 import pyautogui
 import pyperclip
@@ -505,7 +506,7 @@ def open_conditional_window(idx=None):
 
     conditional_window = Toplevel(root)
     conditional_window.title("Conditional Logic")
-    conditional_window.geometry("380x200")
+    conditional_window.geometry("400x235")
     tk.Label(conditional_window, text="Kind").grid(row=0, column=0, pady=10)
     kind_var = tk.StringVar(value=embedded_events[idx]["cond_kind"] if idx is not None else "if")
     tk.OptionMenu(conditional_window, kind_var, "if", "while", "if_else").grid(row=0, column=1, pady=10)
@@ -680,17 +681,36 @@ def open_conditional_window(idx=None):
         canvas.bind("<B1-Motion>", _on_drag)
         canvas.bind("<ButtonRelease-1>", _on_release)
 
+    tk.Label(conditional_window, text="Confidence:").grid(row=3, column=0, sticky="e")
+
+    confidence_val = tk.StringVar(value="0.85")
+    conf_entry = tk.Entry(conditional_window, textvariable=confidence_val)
+    conf_entry.grid(row=3, column=1, columnspan=2, sticky="w")
+
+    inverted_condition_var = tk.BooleanVar(value=False)
+
+    inverted_checkbox = tk.Checkbutton(
+        conditional_window,
+        text="Inverted Condition",
+        variable=inverted_condition_var,
+        onvalue=True,
+        offvalue=False
+    )
+
+    inverted_checkbox.grid(row=4, columnspan=2)
 
     conditional_window.bind("<space>", grab_image)
     capture_button = tk.Button(conditional_window, text="Capture Image (Press Space)" if (img_path_var.get() == "" and idx is None) else "Replace Image",
               command=lambda: (grab_image, capture_button.config(text="Replace Image")))
-    capture_button.grid(row=3, columnspan=2)
+    capture_button.grid(row=5, columnspan=2)
 
     def save_conditional():
         print("Default: ", img_path_var.get())
         cond = {
             "cond_kind": kind_var.get(),
             "image_path": embedded_events[idx]["image_path"] if (img_path_var.get() == "" and idx is not None) else img_path_var.get(),
+            "inverted_condition": inverted_condition_var.get(),
+            "confidence": float(confidence_val.get()) if (0 <= float(confidence_val.get()) <= 1) else 0.85,
             "true_target": label_to_index[true_target_var.get()],
             "false_target": None if kind_var.get() != "if_else" else label_to_index[false_target_var.get()],
         }
@@ -700,9 +720,30 @@ def open_conditional_window(idx=None):
             save_details(idx, cond)
         update_listbox()
         conditional_window.destroy()
-    tk.Button(conditional_window, text="Save", command=save_conditional).grid(row=4, columnspan=2)
+    tk.Button(conditional_window, text="Save", command=save_conditional).grid(row=6, columnspan=2)
 
+def locate_on_all_screens(template_path, confidence=0.85, grayscale=True):
+    # Capture the full virtual screen (all monitors)
+    with mss.mss() as sct:
+        monitor = sct.monitors[0]  # full virtual display
+        raw_img = sct.grab(monitor)
+        pil_img = Image.frombytes('RGB', raw_img.size, raw_img.rgb)
+    # screenshot = pyautogui.screenshot()  # Captures full screen area
+    screenshot = pil_img
+    screen = np.array(screenshot)
 
+    if grayscale:
+        screen = cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY)
+        template = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
+    else:
+        screen = cv2.cvtColor(screen, cv2.COLOR_RGB2BGR)
+        template = cv2.imread(template_path, cv2.IMREAD_COLOR)
+
+    result = cv2.matchTemplate(screen, template, cv2.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+    # print(max_val)
+    return max_val >= confidence
 
 #####################################################
 # Presets
@@ -1215,16 +1256,19 @@ def start_program():
                 time.sleep(delay)
             elif event_type == "conditional":
                 try:
-                    img_found = pyautogui.locateOnScreen(
-                        event["image_path"], confidence=0.85, grayscale=True
-                    ) is not None
+                    img_found = locate_on_all_screens(
+                        event["image_path"], confidence=event["confidence"]#, grayscale=True
+                    )
                 except Exception as e:
-                    print(f"Error locating image: {e}")
-                    img_found = None
-                if img_found is not None:
+                    print(f"An error occurred! What's the condition? {e}")
+                    img_found = False
+                if img_found is not None and img_found is not False:
                     print(f"Condition met!")
 
                 kind = event["cond_kind"]
+                if event["inverted_condition"]:
+                    img_found = not img_found
+
                 if kind == "if":
                     i = event["true_target"] if img_found else i + 1
                 elif kind == "if_else":
