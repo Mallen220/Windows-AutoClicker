@@ -239,9 +239,7 @@ def get_monitor_for_position(x, y):
 #####################################################
 
 
-def save_details(
-    idx, new_settings=None
-):
+def save_details(idx, new_settings=None):
     if new_settings is not None:
         global embedded_events
 
@@ -331,7 +329,6 @@ def add_event(
     update_event_overlays()
 
 
-
 # Function to delete the newest event
 def delete_event(idx=None):
     if embedded_events:
@@ -376,7 +373,6 @@ def modify_event_order(selected_tuple, shift: int) -> None:
     update_listbox()
     event_listbox.select_set(dst_idx)
     update_event_overlays()
-
 
 
 #####################################################
@@ -493,6 +489,7 @@ def type_text(text, delay):
         i += 1
         time.sleep(delay)
 
+
 def create_text_event():
     global is_text_mode
     if not is_text_mode:
@@ -515,12 +512,14 @@ def open_conditional_window(idx=None):
     conditional_window.title("Conditional Logic")
     conditional_window.geometry("400x235")
     tk.Label(conditional_window, text="Kind").grid(row=0, column=0, pady=10)
-    kind_var = tk.StringVar(value=embedded_events[idx]["cond_kind"] if idx is not None else "if")
-    tk.OptionMenu(conditional_window, kind_var, "if", "while", "if_else").grid(row=0, column=1, pady=10)
+    kind_var = tk.StringVar(
+        value=embedded_events[idx]["cond_kind"] if idx is not None else "if"
+    )
+    tk.OptionMenu(conditional_window, kind_var, "if", "while", "if_else").grid(
+        row=0, column=1, pady=10
+    )
 
-    option_labels = [
-        event_to_string(i) for i in range(len(embedded_events))
-    ]
+    option_labels = [event_to_string(i) for i in range(len(embedded_events))]
     if option_labels == []:
         option_labels = ["No events found, select later. (-1)"]
 
@@ -532,14 +531,14 @@ def open_conditional_window(idx=None):
             option_labels[0],
         )
         selected_var = tk.StringVar(value=default_label)
-        tk.Label(conditional_window, text=label_text).grid(row=row_num, column=0, sticky="e")
+        tk.Label(conditional_window, text=label_text).grid(
+            row=row_num, column=0, sticky="e"
+        )
         dropdown = tk.OptionMenu(conditional_window, selected_var, *option_labels)
         dropdown.grid(row=row_num, column=1, sticky="w", pady=5)
         return selected_var, dropdown
 
-    true_target_index = (
-        embedded_events[idx]["true_target"] if idx is not None else 0
-    )
+    true_target_index = embedded_events[idx]["true_target"] if idx is not None else 0
     false_target_index = (
         embedded_events[idx].get("false_target", -1) if idx is not None else -1
     )
@@ -556,6 +555,7 @@ def open_conditional_window(idx=None):
     def update_false_state(*_):
         state = "normal" if kind_var.get() == "if_else" else "disabled"
         false_dropdown.configure(state=state)
+
     kind_var.trace_add("write", update_false_state)
     update_false_state()
 
@@ -573,7 +573,7 @@ def open_conditional_window(idx=None):
         with mss.mss() as sct:
             monitor = sct.monitors[0]  # full virtual display
             raw_img = sct.grab(monitor)
-            pil_img = Image.frombytes('RGB', raw_img.size, raw_img.rgb)
+            pil_img = Image.frombytes("RGB", raw_img.size, raw_img.rgb)
 
         cropped_window(pil_img)  # pass to cropping window
 
@@ -582,9 +582,7 @@ def open_conditional_window(idx=None):
             """
             Save the cropped PIL image, restore the main window, update img_path_var.
             """
-            filename = os.path.join(
-                SCREENSHOT_DIR, f"cond_{int(time.time())}.png"
-            )
+            filename = os.path.join(SCREENSHOT_DIR, f"cond_{int(time.time())}.png")
             pil_img.save(filename)
             conditional_window.deiconify()
 
@@ -625,7 +623,7 @@ def open_conditional_window(idx=None):
             captured_window,
             width=tk_img.width(),
             height=tk_img.height(),
-            cursor="cross"
+            cursor="cross",
         )
         canvas.pack(expand=True)
         canvas.create_image(0, 0, anchor="nw", image=tk_img)
@@ -645,16 +643,12 @@ def open_conditional_window(idx=None):
             if rect_id is not None:
                 canvas.delete(rect_id)
             rect_id = canvas.create_rectangle(
-                start_x, start_y, event.x, event.y,
-                outline="red", width=2
+                start_x, start_y, event.x, event.y, outline="red", width=2
             )
 
         def _on_drag(event):
             nonlocal start_x, start_y, rect_id
-            canvas.coords(
-                rect_id,
-                start_x, start_y, event.x, event.y
-            )
+            canvas.coords(rect_id, start_x, start_y, event.x, event.y)
 
         def _on_release(event):
             nonlocal start_x, start_y, rect_id
@@ -701,40 +695,66 @@ def open_conditional_window(idx=None):
         text="Inverted Condition",
         variable=inverted_condition_var,
         onvalue=True,
-        offvalue=False
+        offvalue=False,
     )
 
     inverted_checkbox.grid(row=4, columnspan=2)
 
     conditional_window.bind("<space>", grab_image)
-    capture_button = tk.Button(conditional_window, text="Capture Image (Press Space)" if (img_path_var.get() == "" and idx is None) else "Replace Image",
-              command=lambda: (grab_image, capture_button.config(text="Replace Image")))
+    capture_button = tk.Button(
+        conditional_window,
+        text=(
+            "Capture Image (Press Space)"
+            if (img_path_var.get() == "" and idx is None)
+            else "Replace Image"
+        ),
+        command=lambda: (grab_image, capture_button.config(text="Replace Image")),
+    )
     capture_button.grid(row=5, columnspan=2)
 
     def save_conditional():
         print("Default: ", img_path_var.get())
         cond = {
             "cond_kind": kind_var.get(),
-            "image_path": embedded_events[idx]["image_path"] if (img_path_var.get() == "" and idx is not None) else img_path_var.get(),
+            "image_path": (
+                embedded_events[idx]["image_path"]
+                if (img_path_var.get() == "" and idx is not None)
+                else img_path_var.get()
+            ),
             "inverted_condition": inverted_condition_var.get(),
-            "confidence": float(confidence_val.get()) if (0 <= float(confidence_val.get()) <= 1) else 0.85,
+            "confidence": (
+                float(confidence_val.get())
+                if (0 <= float(confidence_val.get()) <= 1)
+                else 0.85
+            ),
             "true_target": label_to_index[true_target_var.get()],
-            "false_target": None if kind_var.get() != "if_else" else label_to_index[false_target_var.get()],
+            "false_target": (
+                None
+                if kind_var.get() != "if_else"
+                else label_to_index[false_target_var.get()]
+            ),
         }
         if idx is None:
-            add_event("conditional", extra=cond,)
+            add_event(
+                "conditional",
+                extra=cond,
+            )
         else:
             save_details(idx, cond)
         update_listbox()
         conditional_window.destroy()
-    tk.Button(conditional_window, text="Save", command=save_conditional).grid(row=6, columnspan=2)
+
+    tk.Button(conditional_window, text="Save", command=save_conditional).grid(
+        row=6, columnspan=2
+    )
+
 
 def locate_on_all_screens(template_path, confidence=0.85, grayscale=True):
     # Capture the full virtual screen (all monitors)
     with mss.mss() as sct:
         monitor = sct.monitors[0]  # full virtual display
         raw_img = sct.grab(monitor)
-        pil_img = Image.frombytes('RGB', raw_img.size, raw_img.rgb)
+        pil_img = Image.frombytes("RGB", raw_img.size, raw_img.rgb)
     # screenshot = pyautogui.screenshot()  # Captures full screen area
     screenshot = pil_img
     screen = np.array(screenshot)
@@ -751,6 +771,7 @@ def locate_on_all_screens(template_path, confidence=0.85, grayscale=True):
 
     # print(max_val)
     return max_val >= confidence
+
 
 #####################################################
 # Presets
@@ -971,7 +992,10 @@ def open_detailed_window(idx, rearrange_window=None):
             move_event = tk.Button(
                 detailed_event_window,
                 text="Move Event",
-                command=lambda: (move_selected_event(detailed_event_window), update_listbox()),
+                command=lambda: (
+                    move_selected_event(detailed_event_window),
+                    update_listbox(),
+                ),
             )
             move_event.pack(pady=10)
 
@@ -981,10 +1005,20 @@ def open_detailed_window(idx, rearrange_window=None):
             command=lambda: (
                 save_details(
                     idx,
-                    {"delay": int(timeout_entry.get()),
-                     "random_time": random_time_var.get(),
-                     "press_count": 1 if embedded_events[idx]["type"] == "wait" else int(press_count_entry.get()),
-                     "click_type": "left" if embedded_events[idx]["type"] == "wait" else clicked.get()},
+                    {
+                        "delay": int(timeout_entry.get()),
+                        "random_time": random_time_var.get(),
+                        "press_count": (
+                            1
+                            if embedded_events[idx]["type"] == "wait"
+                            else int(press_count_entry.get())
+                        ),
+                        "click_type": (
+                            "left"
+                            if embedded_events[idx]["type"] == "wait"
+                            else clicked.get()
+                        ),
+                    },
                 ),
                 detailed_event_window.destroy(),
             ),
@@ -1264,7 +1298,8 @@ def start_program():
             elif event_type == "conditional":
                 try:
                     img_found = locate_on_all_screens(
-                        event["image_path"], confidence=event["confidence"]#, grayscale=True
+                        event["image_path"],
+                        confidence=event["confidence"],  # , grayscale=True
                     )
                 except Exception as e:
                     print(f"An error occurred! What's the condition? {e}")
@@ -1279,8 +1314,14 @@ def start_program():
                 if kind == "if":
                     i = event["true_target"] if img_found else i + 1
                 elif kind == "if_else":
-                    i = event["true_target"] if img_found else (
-                        event["false_target"] if event["false_target"] >= 0 else i + 1
+                    i = (
+                        event["true_target"]
+                        if img_found
+                        else (
+                            event["false_target"]
+                            if event["false_target"] >= 0
+                            else i + 1
+                        )
                     )
                 elif kind == "while":
                     i = event["true_target"] if img_found else i + 1
@@ -1337,16 +1378,22 @@ def monitor_space_key():
     thread = threading.Thread(target=stop_on_space_key)
     thread.start()
 
+
 def event_to_string(idx):
     try:
         event = embedded_events[idx]
         t = event["type"]
         match t:
-            case "click" | "scroll": p = f'({event["position"][0]}, {event["position"][1]})'
-            case "text":            p = f'"{event["content"]}"'
-            case "wait":            p = f'{event["delay"]} ms'
-            case "conditional":     p = event["cond_kind"]
-            case _:                 p = ""
+            case "click" | "scroll":
+                p = f'({event["position"][0]}, {event["position"][1]})'
+            case "text":
+                p = f'"{event["content"]}"'
+            case "wait":
+                p = f'{event["delay"]} ms'
+            case "conditional":
+                p = event["cond_kind"]
+            case _:
+                p = ""
         return f"Event {idx + 1}: {t} {p}"
     except Exception as e:
         print(f"Error converting event to string: {e}")
@@ -1386,30 +1433,60 @@ if isWindows:
 #  Root GUI: horizontal bar with C / S / W / T buttons
 # ──────────────────────────────────────────────────────────────
 event_bar = tk.Frame(root)
-event_bar.pack(pady=10)                       # keep the rest of the layout
+event_bar.pack(pady=10)  # keep the rest of the layout
 
-btn_click  = tk.Button(event_bar, text="C", width=0, command=lambda: add_event("click", grab_cursor=True, extra={"click_type": "left", "press_count": 1},))
-btn_scroll = tk.Button(event_bar, text="S", width=0, command=lambda: add_event("scroll", grab_cursor=True, extra={"press_count": 300}, ))
-btn_wait   = tk.Button(event_bar, text="W", width=0, command=lambda: (add_event("wait"), open_detailed_window(len(embedded_events) - 1)))
-btn_text   = tk.Button(event_bar, text="T", width=0, command=create_text_event)
-btn_logic   = tk.Button(event_bar, text="L", width=0, command=open_conditional_window)
+btn_click = tk.Button(
+    event_bar,
+    text="C",
+    width=0,
+    command=lambda: add_event(
+        "click",
+        grab_cursor=True,
+        extra={"click_type": "left", "press_count": 1},
+    ),
+)
+btn_scroll = tk.Button(
+    event_bar,
+    text="S",
+    width=0,
+    command=lambda: add_event(
+        "scroll",
+        grab_cursor=True,
+        extra={"press_count": 300},
+    ),
+)
+btn_wait = tk.Button(
+    event_bar,
+    text="W",
+    width=0,
+    command=lambda: (add_event("wait"), open_detailed_window(len(embedded_events) - 1)),
+)
+btn_text = tk.Button(event_bar, text="T", width=0, command=create_text_event)
+btn_logic = tk.Button(event_bar, text="L", width=0, command=open_conditional_window)
 
 
 for b in (btn_click, btn_scroll, btn_wait, btn_text, btn_logic):
-    b.pack(side="left", padx=0)               # horizontal alignment
+    b.pack(side="left", padx=0)  # horizontal alignment
 
 # ──────────────────────────────────────────────────────────────
 #  Existing control buttons (unchanged)
 # ──────────────────────────────────────────────────────────────
-delete_button           = tk.Button(root, text="Delete Newest Event", command=delete_event)
-rearrange_button        = tk.Button(root, text="Rearrange Events",    command=rearrange_events)
-start_button            = tk.Button(root, text="Start Program",       command=start_program)
-always_on_top_button    = tk.Button(root, text="Always on Top: Off",  command=toggle_always_on_top)
-close_button            = tk.Button(root, text="Close & Save",        command=close_and_save)
+delete_button = tk.Button(root, text="Delete Newest Event", command=delete_event)
+rearrange_button = tk.Button(root, text="Rearrange Events", command=rearrange_events)
+start_button = tk.Button(root, text="Start Program", command=start_program)
+always_on_top_button = tk.Button(
+    root, text="Always on Top: Off", command=toggle_always_on_top
+)
+close_button = tk.Button(root, text="Close & Save", command=close_and_save)
 
-for btn in (delete_button, rearrange_button, start_button,
-            always_on_top_button, close_button):
-    btn.pack(pady=10)                         # keep your existing vertical stack
+for btn in (
+    delete_button,
+    rearrange_button,
+    start_button,
+    always_on_top_button,
+    close_button,
+):
+    btn.pack(pady=10)  # keep your existing vertical stack
 
 listener = keyboard.Listener(on_press=on_press, on_release=on_release)
 listener.start()
