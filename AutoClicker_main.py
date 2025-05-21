@@ -63,18 +63,25 @@ if os.name == "nt":
         program_icon = "AutoClicker.ico"
 else:
     isWindows = False
-    program_icon = "AutoClicker.ico"  # Change the extension if needed
+    program_icon = "AutoClicker.png"
 
 if not os.path.exists(presets_dir):
     os.makedirs(presets_dir)
 
 
 def icon_per_os(window):
-    if isWindows:
-        window.iconbitmap(program_icon)
-    else:
-        print("No Linux Icon!")
-        # window.iconphoto(False, tk.PhotoImage(file=program_icon))
+    try:
+        if isWindows and program_icon.lower().endswith(".ico"):
+            window.iconbitmap(program_icon)
+        elif os.name in ("Linux", "Darwin", "posix"):
+            if program_icon.lower().endswith(".png"):
+                window.iconphoto(False, tk.PhotoImage(file=program_icon))
+            else:
+                print("On Linux/macOS, use a .png icon with iconphoto.")
+        else:
+            print(f"No supported icon method for platform: {os.name}")
+    except Exception as e:
+        print(f"Failed to set icon: {e}")
 
 
 #####################################################
