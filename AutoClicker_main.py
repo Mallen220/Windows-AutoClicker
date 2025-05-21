@@ -45,6 +45,11 @@ SCREENSHOT_DIR = "conditions"
 os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
 
+sidebar_frame = None  # Frame that holds the Listbox
+sidebar_listbox = None
+sidebar_visible = False
+next_event_index = None  # If not-None, run_events will jump here
+
 embedded_events = []
 
 #####################################################
@@ -323,6 +328,7 @@ def add_event(
 
     print("Event created:", event)
     update_event_overlays()
+    update_listbox()
 
 
 # Function to delete the newest event
@@ -859,6 +865,7 @@ def update_last_save_preset():
     except Exception as e:
         print(f"Error updating last saved preset: {e}")
 
+
 #####################################################
 # GUI's
 #####################################################
@@ -991,6 +998,11 @@ def update_listbox():
     except Exception as error:
         print(error)
         print("Listbox does not exist. Failed to updated listbox. Exiting...")
+
+    try:
+        update_sidebar()
+    except Exception:
+        print("Sidebar does not exist. Failed to update sidebar.")
 
 
 # Function to rearrange events and adjust timings
@@ -1162,17 +1174,33 @@ def start_program():
         time.sleep(delay)
 
     def run_events():
+        global next_event_index
+
         i = 0
         n = len(embedded_events)
         while is_running:
             if i >= n:
                 i = 0
+
+            if next_event_index is not None:
+                i, next_event_index = next_event_index, None
+
             if not is_running:
                 break
 
             event = embedded_events[i]
 
             event_type = event["type"]
+
+            if sidebar_visible:
+                root.after(
+                    0,  # run ASAP on GUI thread
+                    lambda idx=i: (
+                        sidebar_listbox.select_clear(0, tk.END),
+                        sidebar_listbox.select_set(idx),
+                        sidebar_listbox.see(idx),
+                    ),
+                )
 
             if event_type in ("click", "scroll"):
                 x, y = event["position"]
@@ -1283,6 +1311,64 @@ def close_and_save():
 
 
 #####################################################
+# Sidebar
+#####################################################
+
+
+def create_sidebar():
+    """Create the sidebar widgets once.  Re-use thereafter."""
+    global sidebar_frame, sidebar_listbox
+    if sidebar_frame is not None:  # already built
+        return
+
+    sidebar_frame = tk.Frame(root, relief="sunken", bd=1)
+    sidebar_listbox = tk.Listbox(sidebar_frame, width=32, height=25)
+    sidebar_listbox.pack(fill=tk.BOTH, expand=True)
+
+    # double-click → make *that* the next event to run
+    sidebar_listbox.bind(
+        "<Button-1>", lambda _: set_next_event(sidebar_listbox.curselection())
+    )
+    update_sidebar()
+
+
+def toggle_sidebar():
+    """Pack / unpack the sidebar and update the toggle-button text."""
+    global sidebar_visible
+    if sidebar_visible:
+        sidebar_frame.pack_forget()
+        sidebar_toggle_btn.config(text="Show event stack")
+        sidebar_visible = False
+        root.geometry(root_default_size)
+    else:
+        create_sidebar()
+        update_sidebar()  # draw current contents
+        sidebar_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=4, pady=4)
+        sidebar_toggle_btn.config(text="Hide event stack")
+        sidebar_visible = True
+        root.geometry(
+            f"{root_default_size.split('x')[0]}x{int(root_default_size.split('x')[1]) + 150}"
+        )  ##ADDS 50 to the root height
+        update_sidebar()
+
+
+def update_sidebar():
+    """Re-populate the Listbox with current events."""
+    if not sidebar_visible:
+        return
+    sidebar_listbox.delete(0, tk.END)
+    for idx in range(len(embedded_events)):
+        sidebar_listbox.insert(tk.END, event_to_string(idx))
+
+
+def set_next_event(selection):
+    """Called from the Listbox; tells run_events what to do next."""
+    global next_event_index
+    if selection:
+        next_event_index = int(selection[0])
+
+
+#####################################################
 # Util's
 #####################################################
 
@@ -1332,7 +1418,8 @@ root = tk.Tk()
 root.title("Event Controller")
 icon_per_os(root)
 root.attributes("-alpha", 0.85)
-root.geometry("250x325")
+root_default_size = "250x300"
+root.geometry(root_default_size)
 
 
 # Function to enable dragging the window by clicking anywhere
@@ -1403,6 +1490,7 @@ start_button = tk.Button(root, text="Start Program", command=start_program)
 always_on_top_button = tk.Button(
     root, text="Always on Top: Off", command=toggle_always_on_top
 )
+sidebar_toggle_btn = tk.Button(root, text="Show event stack", command=toggle_sidebar)
 close_button = tk.Button(root, text="Close & Save", command=close_and_save)
 
 for btn in (
@@ -1410,9 +1498,12 @@ for btn in (
     rearrange_button,
     start_button,
     always_on_top_button,
+    sidebar_toggle_btn,
     close_button,
 ):
-    btn.pack(pady=10)  # keep your existing vertical stack
+    btn.pack(pady=5)  # keep your existing vertical stack
+
+# sidebar_toggle_btn.pack(side=tk.BOTTOM, fill=tk.X, pady=4)
 
 listener = keyboard.Listener(on_press=on_press, on_release=on_release)
 listener.start()

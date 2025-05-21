@@ -1,3 +1,13 @@
 - last_save
 Delay: 500
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (334, 237), 'click_type': 'left', 'press_count': 1}
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (580, 62), 'click_type': 'left', 'press_count': 1}
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (872, 61), 'click_type': 'left', 'press_count': 1}
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (992, 76), 'click_type': 'left', 'press_count': 1}
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (546, 62), 'click_type': 'left', 'press_count': 1}
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (1098, 52), 'click_type': 'left', 'press_count': 1}
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (834, 53), 'click_type': 'left', 'press_count': 1}
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (721, 56), 'click_type': 'left', 'press_count': 1}
+{'type': 'click', 'delay': 100, 'random_time': False, 'position': (619, 57), 'click_type': 'left', 'press_count': 1}
+{'type': 'conditional', 'delay': 100, 'random_time': False, 'cond_kind': 'if_else', 'image_path': 'conditions/cond_1747802380.png', 'inverted_condition': False, 'confidence': 0.85, 'true_target': 4, 'false_target': 0}
 
