@@ -1,0 +1,8 @@
+mss
+numpy
+pynput
+pyautogui
+pyperclip
+screeninfo
+Pillow
+opencv-python
