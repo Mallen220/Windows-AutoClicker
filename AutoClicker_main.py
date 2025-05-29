@@ -882,7 +882,7 @@ def open_detailed_window(idx, rearrange_window=None):
         else:
             detailed_event_window = Toplevel(rearrange_window)
         icon_per_os(detailed_event_window)
-        detailed_event_window.title(f"Set Timeout for Event {idx + 1}")
+        detailed_event_window.title(f"Details of Event {idx + 1}")
 
         timeout_label = tk.Label(detailed_event_window, text="Timeout? (ms)")
         timeout_label.pack(pady=5)
@@ -928,7 +928,7 @@ def open_detailed_window(idx, rearrange_window=None):
                 detailed_event_window,
                 text="Move Event",
                 command=lambda: (
-                    move_selected_event(detailed_event_window),
+                    move_selected_event(detailed_event_window, idx),
                     update_listbox(),
                 ),
             )
@@ -1011,7 +1011,7 @@ def rearrange_events():
     rearrange_window = Toplevel(root)
     icon_per_os(rearrange_window)
     rearrange_window.title("Rearrange Events")
-    rearrange_window.geometry("500x700")
+    rearrange_window.geometry("425x600")
     event_listbox = Listbox(rearrange_window, selectmode=SINGLE, width=40, height=10)
     event_listbox.pack(pady=10)
 
@@ -1122,7 +1122,7 @@ def rearrange_events():
         if selected_idx:
             open_detailed_window(selected_idx[0])
 
-    event_listbox.bind("<Double-Button-1>", on_double_click)
+    event_listbox.bind("<Double-Button-1>", on_double_click) #open_detailed_window(selected_idx[0])
 
     move_up_button = tk.Button(
         rearrange_window,
@@ -1325,7 +1325,8 @@ def create_sidebar():
     sidebar_listbox = tk.Listbox(sidebar_frame, width=32, height=25)
     sidebar_listbox.pack(fill=tk.BOTH, expand=True)
 
-    # double-click → make *that* the next event to run
+    sidebar_listbox.bind("<Double-Button-1>", lambda _: open_detailed_window(sidebar_listbox.curselection()[0]))
+
     sidebar_listbox.bind(
         "<Button-1>", lambda _: set_next_event(sidebar_listbox.curselection())
     )
