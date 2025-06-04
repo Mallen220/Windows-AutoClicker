@@ -7,7 +7,7 @@ special_keys = {
     "altleft": "altleft",
     "altright": "altright",
     "apps": "apps",
-    "backspace": "backspace",
+    # "backspace": "backspace",
     "browserback": "browserback",
     "browserfavorites": "browserfavorites",
     "browserforward": "browserforward",

@@ -15,6 +15,8 @@ import pyperclip
 from screeninfo import get_monitors
 from PIL import Image, ImageTk
 import cv2
+import platform
+
 
 import Constants
 
@@ -380,12 +382,73 @@ def modify_event_order(selected_tuple, shift: int) -> None:
 # Text logic
 #####################################################
 
+def on_keypress(event, widget):
+    import platform
+
+    system = platform.system()
+
+    # macOS (Darwin) vs Windows/Linux modifier detection
+    is_mac = system == "Darwin"
+    is_win_or_linux = not is_mac
+
+    key = event.keysym.lower()
+    char = event.char
+
+    # Fix: ignore modifier-only keys
+    if key in ["shift_l", "shift_r", "control_l", "control_r", "alt_l", "alt_r", "meta_l", "meta_r"]:
+        return "break"
+
+    # Detect modifiers
+    modifiers = []
+    shift = bool(event.state & 0x0001)
+    ctrl = bool(event.state & 0x0004)
+    alt = bool(event.state & 0x0008)
+    cmd = bool(event.delta) if is_mac else False
+
+    if ctrl:
+        modifiers.append("ctrl")
+    if alt:
+        modifiers.append("command" if is_mac else "alt")
+    if shift:
+        modifiers.append("shift")
+
+    # Case 1: Shift + printable character = insert capital/symbol
+    if shift and not (ctrl or alt or cmd):
+        try:
+            shifted_char = event.char
+            if shifted_char and shifted_char.isprintable():
+                widget.insert(tk.INSERT, shifted_char)
+                return "break"
+        except Exception:
+            pass
+
+    # Case 2: Regular character, no modifiers
+    if not modifiers:
+        if char and char.isprintable():
+            widget.insert(tk.INSERT, char)
+            return "break"
+
+        # Check for function/special keys like F1, Up, etc.
+        if key in special_keys:
+            widget.insert(tk.INSERT, f"\\{key}")
+            return "break"
+
+    # Case 3: Modifiers + key → insert special
+    if key == "backspace":
+        widget.delete("insert-1c")
+    else:
+        special_keybind = "\\" + "+".join(modifiers + [key])
+        widget.insert(tk.INSERT, special_keybind)
+        print("Character inserted")
+    return "break"
+
 
 def open_text_input(idx=None):
     global input_window, text_box, instant_type_var
     input_window = Toplevel(root)
     icon_per_os(input_window)
     input_window.title("Enter Text")
+
 
     input_window.geometry("500x400")
     label = tk.Label(
@@ -395,6 +458,9 @@ def open_text_input(idx=None):
     text_box = tk.Text(input_window, width=40, height=5)
     text_box.pack(pady=5)
     text_box.focus()
+
+    text_box.bind("<KeyPress>", lambda e: on_keypress(e, text_box))
+
     instant_type_var = tk.BooleanVar()
     instant_type_check = tk.Checkbutton(
         input_window, text="Instant Type", variable=instant_type_var
@@ -468,26 +534,29 @@ def save_text(idx=None, is_random_time=False):
 def type_text(text, delay):
     i = 0
     while i < len(text):
-        char = text[i]
-        if char == "\\":
-            i += 1
-            if i < len(text):
-                special_key = text[i:]
-                next_special_key = next(
-                    (key for key in special_keys if special_key.startswith(key)), None
-                )
-                if next_special_key:
-                    pyautogui.press(special_keys[next_special_key])
-                    i += len(next_special_key) - 1
-                else:
-                    pyautogui.press(char)
-        elif char == " ":
-            pyautogui.press("space")
-        elif char == "\n":
+        if text[i] == "\\":
+            end = i + 1
+            while end < len(text) and text[end] not in (" ", "\n", "\\"):
+                end += 1
+            command = text[i + 1:end]  # skip the '\'
+
+            # parse command like ctrl+shift+z
+            parts = command.split("+")
+            try:
+                pyautogui.hotkey(*parts)
+            except Exception as e:
+                print(f"Error typing hotkey {command}: {e}")
+            i = end
+        elif text[i] == "\n":
             pyautogui.press("enter")
+            i += 1
+        elif text[i] == " ":
+            pyautogui.press("space")
+            i += 1
         else:
-            pyautogui.press(char)
-        i += 1
+            pyautogui.press(text[i])
+            i += 1
+
         time.sleep(delay)
 
 
