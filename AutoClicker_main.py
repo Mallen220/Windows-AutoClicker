@@ -1003,6 +1003,13 @@ def open_detailed_window(idx, rearrange_window=None):
             )
             move_event.pack(pady=10)
 
+        if embedded_events[idx]["type"] == "click":
+            drag_time_label = tk.Label(detailed_event_window, text="Drag time: (s) *0 is instant*")
+            drag_time_label.pack(pady=5)
+            drag_time_entry = tk.Entry(detailed_event_window)
+            drag_time_entry.pack(pady=5)
+            drag_time_entry.insert(0, str(embedded_events[idx]["drag_time"]))
+
         save_button = tk.Button(
             detailed_event_window,
             text="Save",
@@ -1022,6 +1029,7 @@ def open_detailed_window(idx, rearrange_window=None):
                             if embedded_events[idx]["type"] == "wait"
                             else clicked.get()
                         ),
+                        ("drag_time" if embedded_events[idx]["type"] == "click" else None): (float(drag_time_entry.get()))
                     },
                 ),
                 detailed_event_window.destroy(),
@@ -1279,6 +1287,8 @@ def start_program():
                     pyautogui.click(
                         x,
                         y,
+                        duration=event["drag_time"],
+                        tween=pyautogui.easeOutQuad,
                         button=str(event["click_type"]),
                         clicks=int(press_count),
                     )
@@ -1297,7 +1307,6 @@ def start_program():
                 hotkey_map = {
                     "Copy": [CTRL_KEY, "c"],
                     "Paste": [CTRL_KEY, "v"],
-                    "Print": [CTRL_KEY, "p"],
                     "Control Right Arrow": [CTRL_KEY, "right"],
                 }
 
@@ -1525,7 +1534,7 @@ btn_click = tk.Button(
     command=lambda: add_event(
         "click",
         grab_cursor=True,
-        extra={"click_type": "left", "press_count": 1},
+        extra={"click_type": "left", "press_count": 1, "drag_time": 0.17},
     ),
 )
 btn_scroll = tk.Button(
