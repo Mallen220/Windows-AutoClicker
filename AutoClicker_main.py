@@ -212,18 +212,15 @@ def update_event_overlays():
     if not isWindows:
         return
     global overlay_windows
+    colors = []
 
     for overlay in overlay_windows:
         for label in overlay.label_dict.values():
             label.destroy()
 
     for event_num, event in enumerate(embedded_events, 1):
-        if event["type"] == "click" or event["type"] == "scroll":
-            x, y = event["position"]
-            create_event_overlay(event_num, x, y)
-        elif event["type"] == "text" or event["type"] == "wait":
-            x, y = pyautogui.position()
-            create_event_overlay(event_num, x, y)
+        x, y = event.get("position", (None, None))
+        create_event_overlay(event_num, x, y)
 
 
 # Function to determine which monitor the event was created on
@@ -281,7 +278,7 @@ def move_selected_event(window=None, idx=None):
         or embedded_events[idx]["type"] == "scroll"
     ):
         embedded_events[idx]["position"] = (x, y)
-    update_event_overlays()
+    update_listbox()
 
     if window is not None:
         window.destroy()
@@ -329,7 +326,6 @@ def add_event(
     embedded_events.append(event)
 
     print("Event created:", event)
-    update_event_overlays()
     update_listbox()
 
 
@@ -342,7 +338,7 @@ def delete_event(idx=None):
             deleted_event = embedded_events[idx]
 
         print(f"Deleted event at position: {deleted_event}")
-        update_event_overlays()
+        update_listbox()
         return True
     else:
         print("No events to delete.")
@@ -375,7 +371,6 @@ def modify_event_order(selected_tuple, shift: int) -> None:
 
     update_listbox()
     event_listbox.select_set(dst_idx)
-    update_event_overlays()
 
 
 #####################################################
@@ -567,7 +562,7 @@ def create_text_event():
         open_text_input()
     else:
         save_text()
-        update_event_overlays()
+        update_listbox()
 
 
 #####################################################
@@ -904,7 +899,7 @@ def load_selected(selected_preset):  # listbox.curselection()
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
 
-        update_event_overlays()
+        update_listbox()
 
 
 # Function to delete a preset file from the "Presets" directory
@@ -1065,6 +1060,7 @@ def toggle_always_on_top():
 def update_listbox():
     global event_listbox
     try:
+        update_event_overlays()
         event_listbox.delete(0, END)
         for i in range(len(embedded_events)):
             try:
@@ -1111,12 +1107,11 @@ def rearrange_events():
         for i in range(len(embedded_events)):
             embedded_events[i]["random_time"] = True
             print(f"Randomized timing for Event {i + 1}: True")
-        update_event_overlays()
+        update_listbox()
 
     def delete_all_events():
         global embedded_events
         embedded_events = []
-        update_event_overlays()
         update_listbox()
 
     delete_all_events_button = tk.Button(
@@ -1171,7 +1166,7 @@ def rearrange_events():
                     print(f"Deleted preset: {preset_name}")
                     preset_listbox.delete(selected_preset)
                     embedded_events = []
-                    update_event_overlays()
+                    update_listbox()
 
         load_button = tk.Button(
             load_window,
